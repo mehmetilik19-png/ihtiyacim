@@ -1,0 +1,68 @@
+{
+  "project_info": {
+    "project_number": "386608552545",
+    "firebase_url": "https://birnefes-83398-default-rtdb.firebaseio.com",
+    "project_id": "birnefes-83398",
+    "storage_bucket": "birnefes-83398.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:386608552545:android:f77586792a03cd00ec2820",
+        "android_client_info": {
+          "package_name": "com.example.birnefes"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBYPWEbJlArbRkSB-Q3-OX0F0HZbrvM6ck"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:386608552545:android:0cb0d52fbe916f79ec2820",
+        "android_client_info": {
+          "package_name": "com.ihtiyacim.ihtiyacim"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBYPWEbJlArbRkSB-Q3-OX0F0HZbrvM6ck"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:386608552545:android:ab202c3585c88429ec2820",
+        "android_client_info": {
+          "package_name": "htt.birnefes.com"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBYPWEbJlArbRkSB-Q3-OX0F0HZbrvM6ck"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -15,6 +15,7 @@ class MarketRtdbService {
       if (raw is! Map) return <MarketListingModel>[];
 
       final list = <MarketListingModel>[];
+
       raw.forEach((key, value) {
         if (value is Map) {
           list.add(
@@ -28,11 +29,11 @@ class MarketRtdbService {
 
       list.removeWhere((x) => x.attrs['active'] == false);
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
       return list;
     });
   }
 
-  /// ✅ Yeni ilan ekle
   Future<String> addListing(MarketListingModel model) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final ref = _ref.push();
@@ -46,14 +47,20 @@ class MarketRtdbService {
     return id;
   }
 
-  /// ✅ Güncelle
   Future<void> updateListing(String id, Map<String, dynamic> patch) async {
     patch['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
     await _ref.child(id).update(patch);
   }
 
-  /// ✅ Sil (soft)
   Future<void> deactivateListing(String id) async {
-    await updateListing(id, {'active': false});
+    await updateListing(id, {
+      'active': false,
+      'attrs/active': false,
+    });
+  }
+
+  Future<void> deleteListing(String id) async {
+    await _ref.child(id).remove();
+    await _db.ref('market_comments/$id').remove();
   }
 }

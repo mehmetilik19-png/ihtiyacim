@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../orders/order_detail_page.dart';
 import '../orders/order_model.dart';
 import '../orders/order_repository.dart';
-import '../orders/order_detail_page.dart';
+import 'admin_duyuru_reklam_page.dart';
 
 class AdminOrdersPage extends StatefulWidget {
   const AdminOrdersPage({super.key});
@@ -14,34 +15,140 @@ class AdminOrdersPage extends StatefulWidget {
 class _AdminOrdersPageState extends State<AdminOrdersPage> {
   final repo = OrderRepository();
 
+  OrderStatus? _filter;
+
   String _statusText(OrderStatus s) {
     switch (s) {
       case OrderStatus.created:
         return 'Sipariş alındı';
+
       case OrderStatus.preparing:
         return 'Hazırlanıyor';
+
       case OrderStatus.shipped:
         return 'Kargoya verildi';
+
       case OrderStatus.delivered:
         return 'Teslim edildi';
+
+      case OrderStatus.returnRequested:
+        return 'İade talebi';
+
+      case OrderStatus.returnApproved:
+        return 'İade onaylandı';
+
+      case OrderStatus.returnRejected:
+        return 'İade reddedildi';
+
+      case OrderStatus.returnShipping:
+        return 'İade kargoda';
+
+      case OrderStatus.returnCompleted:
+        return 'İade tamamlandı';
+
+      case OrderStatus.archived:
+        return 'Arşivlendi';
+
       case OrderStatus.cancelled:
         return 'İptal edildi';
     }
   }
 
+  Color _statusColor(OrderStatus s) {
+    switch (s) {
+      case OrderStatus.created:
+        return const Color(0xFFFFB300);
+
+      case OrderStatus.preparing:
+        return const Color(0xFF2196F3);
+
+      case OrderStatus.shipped:
+        return const Color(0xFF7E57C2);
+
+      case OrderStatus.delivered:
+        return const Color(0xFF2E7D32);
+
+      case OrderStatus.returnRequested:
+        return const Color(0xFFFF9800);
+
+      case OrderStatus.returnApproved:
+        return const Color(0xFF009688);
+
+      case OrderStatus.returnRejected:
+        return const Color(0xFFD32F2F);
+
+      case OrderStatus.returnShipping:
+        return const Color(0xFF5E35B1);
+
+      case OrderStatus.returnCompleted:
+        return const Color(0xFF43A047);
+
+      case OrderStatus.archived:
+        return const Color(0xFF607D8B);
+
+      case OrderStatus.cancelled:
+        return const Color(0xFFD32F2F);
+    }
+  }
+
+  IconData _statusIcon(OrderStatus s) {
+    switch (s) {
+      case OrderStatus.created:
+        return Icons.fiber_new_rounded;
+
+      case OrderStatus.preparing:
+        return Icons.inventory_2_outlined;
+
+      case OrderStatus.shipped:
+        return Icons.local_shipping_outlined;
+
+      case OrderStatus.delivered:
+        return Icons.check_circle_outline;
+
+      case OrderStatus.returnRequested:
+        return Icons.assignment_return_outlined;
+
+      case OrderStatus.returnApproved:
+        return Icons.done_all_rounded;
+
+      case OrderStatus.returnRejected:
+        return Icons.close_rounded;
+
+      case OrderStatus.returnShipping:
+        return Icons.local_shipping_rounded;
+
+      case OrderStatus.returnCompleted:
+        return Icons.task_alt_rounded;
+
+      case OrderStatus.archived:
+        return Icons.archive_outlined;
+
+      case OrderStatus.cancelled:
+        return Icons.cancel_outlined;
+    }
+  }
+
   Future<void> _setPreparing(OrderModel o) async {
     await repo.adminSetPreparing(o.orderId, o.buyerId);
+
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Durum güncellendi: Hazırlanıyor ✅')),
+      const SnackBar(
+        content: Text('Hazırlanıyor ✅'),
+      ),
     );
   }
 
   Future<void> _setDelivered(OrderModel o) async {
     await repo.adminSetDelivered(o.orderId, o.buyerId);
+
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Durum güncellendi: Teslim edildi ✅')),
+      const SnackBar(
+        content: Text('Teslim edildi ✅'),
+      ),
     );
   }
 
@@ -59,14 +166,16 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
             TextField(
               controller: companyC,
               decoration: const InputDecoration(
-                labelText: 'Kargo şirketi (opsiyonel)',
+                labelText: 'Kargo şirketi',
+                border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 10),
             TextField(
               controller: trackingC,
               decoration: const InputDecoration(
-                labelText: 'Takip no (zorunlu)',
+                labelText: 'Takip numarası',
+                border: OutlineInputBorder(),
               ),
             ),
           ],
@@ -91,9 +200,13 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
 
     if (trackingNo.isEmpty) {
       if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Takip no zorunlu.')),
+        const SnackBar(
+          content: Text('Takip numarası gerekli'),
+        ),
       );
+
       return;
     }
 
@@ -105,86 +218,150 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
     );
 
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Durum güncellendi: Kargoya verildi ✅')),
+      const SnackBar(
+        content: Text('Kargoya verildi ✅'),
+      ),
     );
+  }
+
+  List<OrderModel> _filteredOrders(List<OrderModel> all) {
+    if (_filter == null) return all;
+
+    return all.where((o) => o.status == _filter).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin • Siparişler')),
+      backgroundColor: const Color(0xFFF3F6FB),
+      appBar: AppBar(
+        title: const Text('Admin • Siparişler'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.campaign_outlined),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const AdminDuyuruReklamPage(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       body: StreamBuilder<List<OrderModel>>(
         stream: repo.watchAllOrders(),
         builder: (context, snap) {
-          final orders = snap.data ?? const <OrderModel>[];
+          final allOrders = snap.data ?? [];
 
-          if (snap.connectionState == ConnectionState.waiting && orders.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
-          }
+          final orders = _filteredOrders(allOrders);
 
           if (orders.isEmpty) {
-            return const Center(child: Text('Sipariş yok.'));
+            return const Center(
+              child: Text('Sipariş yok'),
+            );
           }
 
-          return ListView.separated(
+          return ListView.builder(
             padding: const EdgeInsets.all(12),
             itemCount: orders.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
             itemBuilder: (context, i) {
               final o = orders[i];
 
-              return Card(
-                elevation: 0.4,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+              final color = _statusColor(o.status);
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: color.withOpacity(0.18),
+                  ),
                 ),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(
-                          '#${o.orderId}',
-                          style: const TextStyle(fontWeight: FontWeight.w900),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          _statusIcon(o.status),
+                          color: color,
                         ),
-                        subtitle: Text(
-                          '${o.buyerEmail}\n${_statusText(o.status)} • ${o.grandTotal.toStringAsFixed(0)} TL',
-                        ),
-                        isThreeLine: true,
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => OrderDetailPage(order: o),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            _statusText(o.status),
+                            style: TextStyle(
+                              color: color,
+                              fontWeight: FontWeight.w900,
                             ),
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
+                          ),
+                        ),
+                        Text(
+                          '${o.grandTotal.toStringAsFixed(0)} TL',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => OrderDetailPage(order: o),
+                          ),
+                        );
+                      },
+                      child: Row(
                         children: [
-                          OutlinedButton(
-                            onPressed: () => _setPreparing(o),
-                            child: const Text('Hazırlanıyor'),
+                          Expanded(
+                            child: Text(
+                              '#${o.orderId}\n${o.buyerEmail}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
-                          OutlinedButton(
-                            onPressed: () => _setShipped(o),
-                            child: const Text('Kargoya verildi'),
-                          ),
-                          OutlinedButton(
-                            onPressed: () => _setDelivered(o),
-                            child: const Text('Teslim edildi'),
-                          ),
+                          const Icon(Icons.chevron_right),
                         ],
                       ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    if (o.status == OrderStatus.created)
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () => _setPreparing(o),
+                          child: const Text('Hazırlanıyor Yap'),
+                        ),
+                      ),
+
+                    if (o.status == OrderStatus.preparing)
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () => _setShipped(o),
+                          child: const Text('Kargoya Ver'),
+                        ),
+                      ),
+
+                    if (o.status == OrderStatus.shipped)
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: () => _setDelivered(o),
+                          child: const Text('Teslim Edildi Yap'),
+                        ),
+                      ),
+                  ],
                 ),
               );
             },
@@ -193,4 +370,4 @@ class _AdminOrdersPageState extends State<AdminOrdersPage> {
       ),
     );
   }
-} 
+}

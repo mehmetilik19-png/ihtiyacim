@@ -9,7 +9,7 @@ class RegisterPage extends StatefulWidget {
 }
 
 class _RegisterPageState extends State<RegisterPage> {
-  final loginC = TextEditingController(); // e-posta veya telefon
+  final emailC = TextEditingController();
   final passC = TextEditingController();
   final pass2C = TextEditingController();
 
@@ -18,74 +18,48 @@ class _RegisterPageState extends State<RegisterPage> {
 
   @override
   void dispose() {
-    loginC.dispose();
+    emailC.dispose();
     passC.dispose();
     pass2C.dispose();
     super.dispose();
   }
 
-  bool get isPhone {
-    final v = loginC.text.trim();
-    if (v.contains('@')) return false; // mail ise telefon sayma
-    final digits = v.replaceAll(RegExp(r'\D'), '');
-    return v.startsWith('+') || digits.length >= 10;
-  }
-
   Future<void> _register() async {
+    FocusScope.of(context).unfocus();
+
     setState(() {
       loading = true;
       error = null;
     });
 
     try {
-      if (isPhone) {
-        // 📞 TELEFON İLE KAYIT (SMS)
-        await FirebaseAuth.instance.verifyPhoneNumber(
-          phoneNumber: loginC.text.trim(),
-          verificationCompleted: (cred) async {
-            await FirebaseAuth.instance.signInWithCredential(cred);
-            if (mounted) Navigator.pop(context); // AuthGate Home'a geçirir
-          },
-          verificationFailed: (e) {
-            if (mounted) setState(() => error = _trError(e.code));
-          },
-          codeSent: (verificationId, _) async {
-            final smsCode = await _askSmsCode();
-            if (smsCode == null || smsCode.isEmpty) return;
+      final email = emailC.text.trim();
 
-            final cred = PhoneAuthProvider.credential(
-              verificationId: verificationId,
-              smsCode: smsCode,
-            );
-
-            await FirebaseAuth.instance.signInWithCredential(cred);
-
-            if (mounted) Navigator.pop(context); // AuthGate Home'a geçirir
-          },
-          codeAutoRetrievalTimeout: (_) {},
-        );
-      } else {
-        // 📧 E-POSTA İLE KAYIT
-        if (passC.text != pass2C.text) {
-          if (mounted) setState(() => error = 'Şifreler aynı değil.');
-          return;
-        }
-        if (passC.text.trim().length < 6) {
-          if (mounted) setState(() => error = 'Şifre en az 6 karakter olmalı.');
-          return;
-        }
-
-        await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: loginC.text.trim(),
-          password: passC.text,
-        );
-
-        if (mounted) Navigator.pop(context); // AuthGate Home'a geçirir
+      if (email.isEmpty) {
+        setState(() => error = 'E-posta boş olamaz.');
+        return;
       }
+
+      if (passC.text != pass2C.text) {
+        setState(() => error = 'Şifreler aynı değil.');
+        return;
+      }
+
+      if (passC.text.trim().length < 6) {
+        setState(() => error = 'Şifre en az 6 karakter olmalı.');
+        return;
+      }
+
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: passC.text.trim(),
+      );
+
+      if (mounted) Navigator.pop(context);
     } on FirebaseAuthException catch (e) {
       if (mounted) setState(() => error = _trError(e.code));
-    } catch (_) {
-      if (mounted) setState(() => error = 'Bir hata oluştu.');
+    } catch (e) {
+      if (mounted) setState(() => error = 'Bir hata oluştu: $e');
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -98,60 +72,20 @@ class _RegisterPageState extends State<RegisterPage> {
       case 'invalid-email':
         return 'E-posta geçersiz.';
       case 'weak-password':
-        return 'Şifre çok zayıf (en az 6 karakter).';
+        return 'Şifre çok zayıf.';
       case 'operation-not-allowed':
-        return 'Bu giriş yöntemi kapalı (Firebase ayarlarını kontrol et).';
-      case 'too-many-requests':
-        return 'Çok fazla deneme yapıldı. Lütfen sonra tekrar dene.';
-      case 'invalid-phone-number':
-        return 'Telefon numarası geçersiz. Örn: +905xxxxxxxxx';
-      case 'invalid-verification-code':
-        return 'SMS kodu hatalı.';
-      case 'session-expired':
-        return 'SMS oturumu süresi doldu, tekrar dene.';
+        return 'E-posta giriş yöntemi kapalı.';
       default:
-        return 'Kayıt başarısız.';
+        return 'Kayıt başarısız. Hata kodu: $code';
     }
-  }
-
-  Future<String?> _askSmsCode() async {
-    final c = TextEditingController();
-
-    final res = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('SMS Kodu'),
-        content: TextField(
-          controller: c,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(hintText: '6 haneli kod'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('İptal'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, c.text.trim()),
-            child: const Text('Doğrula'),
-          ),
-        ],
-      ),
-    );
-
-    c.dispose();
-    return res;
   }
 
   @override
   Widget build(BuildContext context) {
-    final phoneMode = isPhone;
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Kayıt Ol'),
+        title: const Text('Hesap Oluştur'),
         actions: [
-          // ✅ "Çıkış" yerine: Giriş ekranına dön (kayıt ekranında mantıklısı bu)
           IconButton(
             tooltip: 'Girişe Dön',
             icon: const Icon(Icons.close),
@@ -163,43 +97,61 @@ class _RegisterPageState extends State<RegisterPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
+            // 🔥 AÇIKLAMA
+            const Text(
+              'E-postanı yaz, uygulama için yeni bir şifre belirle.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+
+            const SizedBox(height: 14),
+
             if (error != null)
               Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: Text(error!, style: const TextStyle(color: Colors.red)),
+                child: Text(
+                  error!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.red),
+                ),
               ),
 
+            // 📧 E-POSTA
             TextField(
-              controller: loginC,
-              keyboardType: TextInputType.text,
+              controller: emailC,
+              keyboardType: TextInputType.emailAddress,
               decoration: const InputDecoration(
-                labelText: 'E-posta veya Telefon',
-                hintText: '+905xxxxxxxxx veya mail@ornek.com',
+                labelText: 'E-posta',
+                hintText: 'ornek@mail.com',
                 border: OutlineInputBorder(),
               ),
-              onChanged: (_) => setState(() {}),
             ),
 
             const SizedBox(height: 12),
 
-            // Telefon kayıt modunda şifre alanlarını kapat
+            // 🔒 ŞİFRE BELİRLE
             TextField(
               controller: passC,
               obscureText: true,
-              enabled: !phoneMode,
-              decoration: InputDecoration(
-                labelText: 'Şifre',
-                border: const OutlineInputBorder(),
-                helperText: phoneMode ? 'Telefon kaydında şifre gerekmez.' : null,
+              decoration: const InputDecoration(
+                labelText: 'Şifre Belirle',
+                hintText: 'Uygulama için yeni şifre oluştur',
+                border: OutlineInputBorder(),
               ),
             ),
+
             const SizedBox(height: 12),
+
+            // 🔒 ŞİFRE TEKRAR
             TextField(
               controller: pass2C,
               obscureText: true,
-              enabled: !phoneMode,
               decoration: const InputDecoration(
-                labelText: 'Şifre Tekrar',
+                labelText: 'Şifreyi Tekrar Yaz',
+                hintText: 'Belirlediğin şifreyi tekrar yaz',
                 border: OutlineInputBorder(),
               ),
             ),
@@ -216,7 +168,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   width: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-                    : Text(phoneMode ? 'SMS ile Kayıt Ol' : 'Kayıt Ol'),
+                    : const Text('Hesap Oluştur'),
               ),
             ),
 

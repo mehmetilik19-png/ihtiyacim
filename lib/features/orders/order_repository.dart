@@ -7,7 +7,6 @@ class OrderRepository {
 
   final FirebaseFirestore _db;
 
-  // Firestore collection paths
   CollectionReference<Map<String, dynamic>> get _orders =>
       _db.collection('orders').withConverter<Map<String, dynamic>>(
         fromFirestore: (s, _) => (s.data() ?? <String, dynamic>{}),
@@ -28,15 +27,12 @@ class OrderRepository {
 
   int _now() => DateTime.now().millisecondsSinceEpoch;
 
-  /// ✅ Kullanıcı sipariş oluşturur (Firestore)
   Future<String> createOrder({
     required String buyerId,
     required String buyerEmail,
     required List<OrderItem> items,
     required ShippingAddress address,
     required double grandTotal,
-
-    /// Hediyelik ürünlerde müşteri foto linkleri
     Map<String, String>? customerPhotosByProductId,
   }) async {
     if (address.phone.trim().isEmpty) {
@@ -44,7 +40,7 @@ class OrderRepository {
     }
 
     final now = _now();
-    final doc = _orders.doc(); // auto id
+    final doc = _orders.doc();
     final orderId = doc.id;
 
     final order = OrderModel(
@@ -68,24 +64,20 @@ class OrderRepository {
 
     final batch = _db.batch();
 
-    // orders/{orderId}
     batch.set(doc, data);
 
-    // user_orders/{uid}/orders/{orderId}
     batch.set(_userOrders(buyerId).doc(orderId), {
       'orderId': orderId,
       'createdAt': now,
       'updatedAt': now,
     });
 
-    // event: created
     batch.set(_events(orderId).doc(), {
       'type': 'created',
       'message': 'Sipariş alındı',
       'createdAt': now,
     });
 
-    // system message
     batch.set(_messages(orderId).doc(), {
       'from': 'system',
       'text': 'Sipariş alındı. Hazırlık başlayınca haber vereceğiz.',
@@ -97,7 +89,6 @@ class OrderRepository {
     return orderId;
   }
 
-  /// ✅ Kullanıcı siparişlerim: orderId listesi
   Stream<List<String>> watchUserOrderIds(String uid) {
     return _userOrders(uid)
         .orderBy('createdAt', descending: true)
@@ -105,7 +96,6 @@ class OrderRepository {
         .map((snap) => snap.docs.map((d) => d.id).toList());
   }
 
-  /// ✅ Tek sipariş dinle
   Stream<OrderModel?> watchOrder(String orderId) {
     return _orders.doc(orderId).snapshots().map((snap) {
       final v = snap.data();
@@ -114,17 +104,23 @@ class OrderRepository {
     });
   }
 
-  /// ✅ Admin: tüm siparişler
-  Stream<List<OrderModel>> watchAllOrders() {
+  Stream<List<OrderModel>> watchAllOrders({bool includeArchived = false}) {
     return _orders
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snap) {
-      return snap.docs.map((d) => OrderModel.fromMap(d.id, d.data())).toList();
+      final list =
+      snap.docs.map((d) => OrderModel.fromMap(d.id, d.data())).toList();
+
+      if (includeArchived) return list;
+
+      return list.where((o) {
+        final raw = o.toMap()['archived'];
+        return raw != true;
+      }).toList();
     });
   }
 
-  /// ✅ Sipariş eventleri
   Stream<List<Map<String, dynamic>>> watchEvents(String orderId) {
     return _events(orderId)
         .orderBy('createdAt', descending: false)
@@ -143,7 +139,6 @@ class OrderRepository {
     });
   }
 
-  /// ✅ Admin durum: hazırlanıyor
   Future<void> adminSetPreparing(String orderId, String buyerId) async {
     final now = _now();
     final batch = _db.batch();
@@ -177,7 +172,6 @@ class OrderRepository {
     await batch.commit();
   }
 
-  /// ✅ Admin durum: kargoda
   Future<void> adminSetShipped({
     required String orderId,
     required String buyerId,
@@ -191,6 +185,7 @@ class OrderRepository {
       'status': 'shipped',
       'trackingNo': trackingNo,
       'trackingCompany': company,
+      'shippedAt': now,
       'updatedAt': now,
     });
 
@@ -222,25 +217,29 @@ class OrderRepository {
     await batch.commit();
   }
 
-  /// ✅ Admin durum: teslim
   Future<void> adminSetDelivered(String orderId, String buyerId) async {
     final now = _now();
+    final returnDeadline =
+        DateTime.now().add(const Duration(days: 14)).millisecondsSinceEpoch;
+
     final batch = _db.batch();
 
     batch.update(_orders.doc(orderId), {
       'status': 'delivered',
+      'deliveredAt': now,
+      'returnDeadline': returnDeadline,
       'updatedAt': now,
     });
 
     batch.set(_events(orderId).doc(), {
       'type': 'delivered',
-      'message': 'Teslim edildi',
+      'message': 'Teslim edildi. İade süresi 14 gün.',
       'createdAt': now,
     });
 
     batch.set(_notifications(buyerId).doc(), {
       'title': 'Teslim edildi',
-      'body': 'Sipariş #$orderId teslim edildi.',
+      'body': 'Sipariş #$orderId teslim edildi. İade süresi 14 gün.',
       'createdAt': now,
       'read': false,
       'orderId': orderId,
@@ -248,7 +247,7 @@ class OrderRepository {
 
     batch.set(_messages(orderId).doc(), {
       'from': 'system',
-      'text': 'Sipariş teslim edildi.',
+      'text': 'Sipariş teslim edildi. İade talebi için 14 gün süren var.',
       'createdAt': now,
       'system': true,
     });
@@ -256,13 +255,237 @@ class OrderRepository {
     await batch.commit();
   }
 
-  /// ✅ Kullanıcı mesaj yazar (order chat)
+  Future<void> userRequestReturn({
+    required String orderId,
+    required String buyerId,
+    required String reason,
+  }) async {
+    final now = _now();
+
+    final snap = await _orders.doc(orderId).get();
+    final data = snap.data();
+
+    if (data == null) {
+      throw Exception('Sipariş bulunamadı.');
+    }
+
+    final deadlineRaw = data['returnDeadline'];
+    final deadline = deadlineRaw is int
+        ? deadlineRaw
+        : int.tryParse((deadlineRaw ?? '0').toString()) ?? 0;
+
+    if (deadline > 0 && now > deadline) {
+      throw Exception('İade süresi dolmuş.');
+    }
+
+    final batch = _db.batch();
+
+    batch.update(_orders.doc(orderId), {
+      'status': 'return_requested',
+      'returnReason': reason,
+      'returnRequestedAt': now,
+      'updatedAt': now,
+    });
+
+    batch.set(_events(orderId).doc(), {
+      'type': 'return_requested',
+      'message': 'İade talebi oluşturuldu: $reason',
+      'createdAt': now,
+    });
+
+    batch.set(_messages(orderId).doc(), {
+      'from': 'system',
+      'text': 'İade talebin alındı. Admin inceleyecek.',
+      'createdAt': now,
+      'system': true,
+    });
+
+    await batch.commit();
+  }
+
+  Future<void> adminApproveReturn({
+    required String orderId,
+    required String buyerId,
+    String? adminNote,
+  }) async {
+    final now = _now();
+    final batch = _db.batch();
+
+    batch.update(_orders.doc(orderId), {
+      'status': 'return_approved',
+      'returnAdminNote': adminNote,
+      'returnApprovedAt': now,
+      'updatedAt': now,
+    });
+
+    batch.set(_events(orderId).doc(), {
+      'type': 'return_approved',
+      'message': 'İade talebi onaylandı',
+      'createdAt': now,
+    });
+
+    batch.set(_notifications(buyerId).doc(), {
+      'title': 'İade talebi onaylandı',
+      'body': 'Sipariş #$orderId için iade talebin onaylandı.',
+      'createdAt': now,
+      'read': false,
+      'orderId': orderId,
+    });
+
+    batch.set(_messages(orderId).doc(), {
+      'from': 'system',
+      'text': 'İade talebin onaylandı.',
+      'createdAt': now,
+      'system': true,
+    });
+
+    await batch.commit();
+  }
+
+  Future<void> adminRejectReturn({
+    required String orderId,
+    required String buyerId,
+    String? adminNote,
+  }) async {
+    final now = _now();
+    final batch = _db.batch();
+
+    batch.update(_orders.doc(orderId), {
+      'status': 'return_rejected',
+      'returnAdminNote': adminNote,
+      'returnRejectedAt': now,
+      'updatedAt': now,
+    });
+
+    batch.set(_events(orderId).doc(), {
+      'type': 'return_rejected',
+      'message': 'İade talebi reddedildi',
+      'createdAt': now,
+    });
+
+    batch.set(_notifications(buyerId).doc(), {
+      'title': 'İade talebi reddedildi',
+      'body': 'Sipariş #$orderId için iade talebin reddedildi.',
+      'createdAt': now,
+      'read': false,
+      'orderId': orderId,
+    });
+
+    batch.set(_messages(orderId).doc(), {
+      'from': 'system',
+      'text': 'İade talebin reddedildi.',
+      'createdAt': now,
+      'system': true,
+    });
+
+    await batch.commit();
+  }
+
+  Future<void> adminSetReturnShipping({
+    required String orderId,
+    required String buyerId,
+    String? trackingNo,
+    String? company,
+  }) async {
+    final now = _now();
+    final batch = _db.batch();
+
+    batch.update(_orders.doc(orderId), {
+      'status': 'return_shipping',
+      'returnTrackingNo': trackingNo,
+      'returnTrackingCompany': company,
+      'returnShippingAt': now,
+      'updatedAt': now,
+    });
+
+    batch.set(_events(orderId).doc(), {
+      'type': 'return_shipping',
+      'message': 'İade kargoda',
+      'createdAt': now,
+    });
+
+    batch.set(_messages(orderId).doc(), {
+      'from': 'system',
+      'text': 'İade kargoda.',
+      'createdAt': now,
+      'system': true,
+    });
+
+    await batch.commit();
+  }
+
+  Future<void> adminCompleteReturn({
+    required String orderId,
+    required String buyerId,
+  }) async {
+    final now = _now();
+    final batch = _db.batch();
+
+    batch.update(_orders.doc(orderId), {
+      'status': 'return_completed',
+      'returnCompletedAt': now,
+      'updatedAt': now,
+    });
+
+    batch.set(_events(orderId).doc(), {
+      'type': 'return_completed',
+      'message': 'İade tamamlandı',
+      'createdAt': now,
+    });
+
+    batch.set(_notifications(buyerId).doc(), {
+      'title': 'İade tamamlandı',
+      'body': 'Sipariş #$orderId iade süreci tamamlandı.',
+      'createdAt': now,
+      'read': false,
+      'orderId': orderId,
+    });
+
+    batch.set(_messages(orderId).doc(), {
+      'from': 'system',
+      'text': 'İade süreci tamamlandı.',
+      'createdAt': now,
+      'system': true,
+    });
+
+    await batch.commit();
+  }
+
+  Future<void> adminArchiveOrder(String orderId) async {
+    final now = _now();
+
+    await _orders.doc(orderId).update({
+      'archived': true,
+      'archivedAt': now,
+      'updatedAt': now,
+    });
+
+    await _events(orderId).add({
+      'type': 'archived',
+      'message': 'Sipariş arşive alındı',
+      'createdAt': now,
+    });
+  }
+
+  Future<void> adminDeleteOrder({
+    required String orderId,
+    required String buyerId,
+  }) async {
+    final batch = _db.batch();
+
+    batch.delete(_orders.doc(orderId));
+    batch.delete(_userOrders(buyerId).doc(orderId));
+
+    await batch.commit();
+  }
+
   Future<void> sendUserMessage({
     required String orderId,
     required String fromUid,
     required String text,
   }) async {
     final now = _now();
+
     await _messages(orderId).add({
       'from': fromUid,
       'text': text,
@@ -271,7 +494,6 @@ class OrderRepository {
     });
   }
 
-  /// ✅ Sipariş mesajlarını dinle
   Stream<List<Map<String, dynamic>>> watchMessages(String orderId) {
     return _messages(orderId)
         .orderBy('createdAt', descending: false)

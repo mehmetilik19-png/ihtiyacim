@@ -22,8 +22,9 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
   final _formKey = GlobalKey<FormState>();
 
   final _titleC = TextEditingController();
+  final _oldPriceC = TextEditingController();
   final _priceC = TextEditingController();
-  final _yearC = TextEditingController(); // Oto için zorunlu
+  final _yearC = TextEditingController();
 
   final _picker = ImagePicker();
 
@@ -36,12 +37,10 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
       ? (MarketCatalog.categoryMap[categoryMain] ?? const <String>[]).first
       : '';
 
-  // Normal kategorilerde marka
   late String brand = (MarketCatalog.brandsForMain(categoryMain)).isNotEmpty
       ? MarketCatalog.brandsForMain(categoryMain).first
       : 'Diğer';
 
-  // Oto alanları
   String vehicleBrand = MarketCatalog.autoBrands.first;
   late String vehicleModel =
       (MarketCatalog.autoModels[vehicleBrand] ?? const <String>['Diğer']).first;
@@ -49,19 +48,15 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
   String partType =
       (MarketCatalog.categoryMap['Oto Parça'] ?? const <String>['Motor']).first;
 
-  /// Motor için 2 katman
-  String motorMode = 'Komple Motor'; // 'Komple Motor' | 'Motor Parçası'
-  String? motorVolume; // 1.4 / 1.5 / ...
-  String? motorPart; // Silindir Kapak / Piston / ...
+  String motorMode = 'Komple Motor';
+  String? motorVolume;
+  String? motorPart;
 
-  /// Motor DIŞI alt parça
   late String subPart =
       (MarketCatalog.autoParts[partType] ?? const <String>['Diğer']).first;
 
   final List<Uint8List> pickedBytes = [];
   bool loading = false;
-
-  // Upload progress
   int uploadedCount = 0;
 
   bool get isAuto => categoryMain == 'Oto Parça';
@@ -69,16 +64,13 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
   @override
   void initState() {
     super.initState();
-    loading = false;
-    uploadedCount = 0;
-
-    // İlk subPart set (partType ilk değer)
     subPart = (MarketCatalog.autoParts[partType] ?? const <String>['Diğer']).first;
   }
 
   @override
   void dispose() {
     _titleC.dispose();
+    _oldPriceC.dispose();
     _priceC.dispose();
     _yearC.dispose();
     super.dispose();
@@ -89,7 +81,12 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
-  // ✅ Galeriden çoklu seç
+  String _generateIlanCode() {
+    final now = DateTime.now().millisecondsSinceEpoch.toString();
+    final random = Random().nextInt(900) + 100;
+    return 'MKT-${now.substring(now.length - 6)}$random';
+  }
+
   Future<void> pickPhotos() async {
     try {
       final files = await _picker.pickMultiImage(imageQuality: 75);
@@ -104,7 +101,6 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
     }
   }
 
-  // ✅ Kameradan tek foto çek
   Future<void> pickFromCamera() async {
     try {
       final file = await _picker.pickImage(
@@ -112,6 +108,7 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
         imageQuality: 80,
         preferredCameraDevice: CameraDevice.rear,
       );
+
       if (file == null) return;
 
       final b = await file.readAsBytes();
@@ -119,8 +116,7 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
 
       setState(() => pickedBytes.add(b));
     } catch (e) {
-      // Kamera yok / izin yok / emülatör vs. hepsini tek mesajla yakala
-      _snack('Kamera açılamadı (izin kapalı veya cihazda kamera yok).');
+      _snack('Kamera açılamadı.');
     }
   }
 
@@ -170,14 +166,15 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
     }
 
     int? year;
+
     if (isAuto) {
       year = int.tryParse(_yearC.text.trim());
+
       if (year == null || year < 1950 || year > DateTime.now().year + 1) {
-        _snack('Oto için model yılı zorunlu (örn: 2008)');
+        _snack('Oto için model yılı zorunlu');
         return;
       }
 
-      // Motor özel zorunluluk
       if (partType == 'Motor') {
         if (motorMode == 'Komple Motor') {
           if ((motorVolume ?? '').trim().isEmpty) {
@@ -193,7 +190,6 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
       }
     }
 
-    if (!mounted) return;
     setState(() {
       loading = true;
       uploadedCount = 0;
@@ -206,23 +202,22 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
       for (final b in pickedBytes) {
         final url = await imgbb.uploadBytes(b);
         urls.add(url);
+
         if (mounted) {
-          setState(() =>
-          uploadedCount = min(uploadedCount + 1, pickedBytes.length));
+          setState(() {
+            uploadedCount = min(uploadedCount + 1, pickedBytes.length);
+          });
         }
       }
 
-      // Kategori/marka final değerleri
       String finalCategorySub = categorySub;
       String finalBrand = brand;
 
-      // Oto: categorySub = parça türü, brand = araç markası
       if (isAuto) {
         finalCategorySub = partType;
         finalBrand = vehicleBrand;
       }
 
-      // Oto seçim (motor ise 2 katman)
       final String otoSelection = (partType == 'Motor')
           ? (motorMode == 'Komple Motor'
           ? 'Komple Motor | ${motorVolume ?? ''}'
@@ -237,7 +232,10 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
           ? 'cat_${_makeId('oto_parca')}_${_makeId(vehicleBrand)}_${_makeId(vehicleModel)}_${_makeId(partType)}_${_makeId(otoSelection)}_${_makeId((year ?? 0).toString())}'
           : 'cat_${_makeId(categoryMain)}_${_makeId(finalCategorySub)}_${_makeId(finalBrand)}';
 
-      // 🔥 KRİTİK: ownerUid mutlaka yazılacak
+      final price = int.parse(_priceC.text.trim());
+      final oldPrice = int.tryParse(_oldPriceC.text.trim()) ?? 0;
+      final ilanCode = _generateIlanCode();
+
       final attrs = <String, dynamic>{
         'ownerUid': user.uid,
         'main': categoryMain,
@@ -245,6 +243,8 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
         'brand': finalBrand,
         'city': city,
         'condition': condition,
+        'oldPrice': oldPrice,
+        'ilanCode': ilanCode,
       };
 
       if (isAuto) {
@@ -265,7 +265,7 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
       final model = MarketListingModel(
         id: '',
         title: _titleC.text.trim(),
-        price: int.parse(_priceC.text.trim()),
+        price: price,
         condition: condition,
         categoryMain: categoryMain,
         categorySub: finalCategorySub,
@@ -356,6 +356,7 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
           padding: const EdgeInsets.all(14),
           children: [
             const _SectionTitle('İlan Bilgileri'),
+
             TextFormField(
               controller: _titleC,
               textInputAction: TextInputAction.next,
@@ -370,24 +371,57 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                 return null;
               },
             ),
+
             const SizedBox(height: 12),
+
+            TextFormField(
+              controller: _oldPriceC,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: const InputDecoration(
+                labelText: 'Eski Fiyat (TL)',
+                hintText: 'Örn: 1000',
+                helperText: 'Boş bırakılırsa üstü çizili fiyat gösterilmez.',
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) {
+                final oldPrice = int.tryParse((v ?? '').trim()) ?? 0;
+                final price = int.tryParse(_priceC.text.trim()) ?? 0;
+
+                if (oldPrice > 0 && price > 0 && oldPrice <= price) {
+                  return 'Eski fiyat, indirimli fiyattan yüksek olmalı';
+                }
+
+                return null;
+              },
+            ),
+
+            const SizedBox(height: 12),
+
             TextFormField(
               controller: _priceC,
               keyboardType: TextInputType.number,
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: const InputDecoration(
-                labelText: 'Fiyat (TL)',
+                labelText: 'İndirimli / Satış Fiyatı (TL)',
+                hintText: 'Örn: 500',
                 border: OutlineInputBorder(),
               ),
               validator: (v) {
                 final p = int.tryParse((v ?? '').trim()) ?? 0;
                 if (p <= 0) return 'Fiyat zorunlu';
+
+                final oldPrice = int.tryParse(_oldPriceC.text.trim()) ?? 0;
+                if (oldPrice > 0 && oldPrice <= p) {
+                  return 'İndirim için eski fiyat daha yüksek olmalı';
+                }
+
                 return null;
               },
             ),
+
             const SizedBox(height: 12),
 
-            // ✅ OVERFLOW FIX: isExpanded + ellipsis
             Row(
               children: [
                 Expanded(
@@ -399,10 +433,7 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                       border: OutlineInputBorder(),
                     ),
                     items: MarketCatalog.conditions
-                        .map((x) => DropdownMenuItem(
-                      value: x,
-                      child: _ddText(x),
-                    ))
+                        .map((x) => DropdownMenuItem(value: x, child: _ddText(x)))
                         .toList(),
                     onChanged:
                     loading ? null : (v) => setState(() => condition = v ?? '1el'),
@@ -418,10 +449,7 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                       border: OutlineInputBorder(),
                     ),
                     items: MarketCatalog.cities
-                        .map((x) => DropdownMenuItem(
-                      value: x,
-                      child: _ddText(x),
-                    ))
+                        .map((x) => DropdownMenuItem(value: x, child: _ddText(x)))
                         .toList(),
                     onChanged: loading
                         ? null
@@ -451,7 +479,8 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                 setState(() {
                   categoryMain = newMain;
 
-                  final newSubs = MarketCatalog.categoryMap[newMain] ?? const <String>[];
+                  final newSubs =
+                      MarketCatalog.categoryMap[newMain] ?? const <String>[];
                   categorySub = newSubs.isNotEmpty ? newSubs.first : '';
 
                   final newBrands = MarketCatalog.brandsForMain(newMain);
@@ -460,20 +489,27 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                   if (newMain == 'Oto Parça') {
                     vehicleBrand = MarketCatalog.autoBrands.first;
                     vehicleModel =
-                        (MarketCatalog.autoModels[vehicleBrand] ?? const ['Diğer']).first;
+                        (MarketCatalog.autoModels[vehicleBrand] ?? const ['Diğer'])
+                            .first;
                     partType =
-                        (MarketCatalog.categoryMap['Oto Parça'] ?? const <String>['Motor']).first;
+                        (MarketCatalog.categoryMap['Oto Parça'] ??
+                            const <String>['Motor'])
+                            .first;
 
                     motorMode = 'Komple Motor';
                     motorVolume = null;
                     motorPart = null;
 
-                    subPart = (MarketCatalog.autoParts[partType] ?? const <String>['Diğer']).first;
+                    subPart =
+                        (MarketCatalog.autoParts[partType] ??
+                            const <String>['Diğer'])
+                            .first;
                     _yearC.text = '';
                   }
                 });
               },
             ),
+
             const SizedBox(height: 12),
 
             if (isAuto) ...[
@@ -491,18 +527,21 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                     ? null
                     : (v) {
                   final newBrand = v ?? MarketCatalog.autoBrands.first;
-                  final models = MarketCatalog.autoModels[newBrand] ?? const <String>['Diğer'];
+                  final models =
+                      MarketCatalog.autoModels[newBrand] ?? const <String>['Diğer'];
+
                   setState(() {
                     vehicleBrand = newBrand;
                     vehicleModel = models.first;
-
                     motorMode = 'Komple Motor';
                     motorVolume = null;
                     motorPart = null;
                   });
                 },
               ),
+
               const SizedBox(height: 12),
+
               DropdownButtonFormField<String>(
                 isExpanded: true,
                 value: vehicleModel,
@@ -513,11 +552,12 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                 items: autoModels
                     .map((x) => DropdownMenuItem(value: x, child: _ddText(x)))
                     .toList(),
-                onChanged: loading
-                    ? null
-                    : (v) => setState(() => vehicleModel = v ?? autoModels.first),
+                onChanged:
+                loading ? null : (v) => setState(() => vehicleModel = v ?? autoModels.first),
               ),
+
               const SizedBox(height: 12),
+
               DropdownButtonFormField<String>(
                 isExpanded: true,
                 value: partType,
@@ -534,15 +574,17 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                   final newType = v ?? partTypes.first;
                   setState(() {
                     partType = newType;
-
-                    subPart = (MarketCatalog.autoParts[newType] ?? const <String>['Diğer']).first;
-
+                    subPart =
+                        (MarketCatalog.autoParts[newType] ??
+                            const <String>['Diğer'])
+                            .first;
                     motorMode = 'Komple Motor';
                     motorVolume = null;
                     motorPart = null;
                   });
                 },
               ),
+
               const SizedBox(height: 12),
 
               if (partType == 'Motor') ...[
@@ -567,7 +609,9 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                     });
                   },
                 ),
+
                 const SizedBox(height: 12),
+
                 if (motorMode == 'Komple Motor') ...[
                   DropdownButtonFormField<String?>(
                     isExpanded: true,
@@ -583,6 +627,7 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                   ),
                   const SizedBox(height: 12),
                 ],
+
                 if (motorMode == 'Motor Parçası') ...[
                   DropdownButtonFormField<String?>(
                     isExpanded: true,
@@ -609,9 +654,8 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                   items: subPartsNonMotor
                       .map((x) => DropdownMenuItem(value: x, child: _ddText(x)))
                       .toList(),
-                  onChanged: loading
-                      ? null
-                      : (v) => setState(() => subPart = v ?? subPartsNonMotor.first),
+                  onChanged:
+                  loading ? null : (v) => setState(() => subPart = v ?? subPartsNonMotor.first),
                 ),
                 const SizedBox(height: 12),
               ],
@@ -621,7 +665,7 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: const InputDecoration(
-                  labelText: 'Model Yılı (zorunlu)',
+                  labelText: 'Model Yılı',
                   border: OutlineInputBorder(),
                   hintText: 'Örn: 2008',
                 ),
@@ -629,15 +673,20 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                   if (!isAuto) return null;
                   final y = int.tryParse((v ?? '').trim());
                   if (y == null) return 'Model yılı zorunlu';
-                  if (y < 1950 || y > DateTime.now().year + 1) return 'Model yılı geçersiz';
+                  if (y < 1950 || y > DateTime.now().year + 1) {
+                    return 'Model yılı geçersiz';
+                  }
                   return null;
                 },
               ),
+
               const SizedBox(height: 12),
             ] else ...[
               DropdownButtonFormField<String>(
                 isExpanded: true,
-                value: categorySub.isNotEmpty ? categorySub : (subs.isNotEmpty ? subs.first : ''),
+                value: categorySub.isNotEmpty
+                    ? categorySub
+                    : (subs.isNotEmpty ? subs.first : ''),
                 decoration: const InputDecoration(
                   labelText: 'Alt Kategori',
                   border: OutlineInputBorder(),
@@ -647,9 +696,13 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                     .toList(),
                 onChanged: loading
                     ? null
-                    : (v) => setState(() => categorySub = v ?? (subs.isNotEmpty ? subs.first : '')),
+                    : (v) => setState(
+                      () => categorySub = v ?? (subs.isNotEmpty ? subs.first : ''),
+                ),
               ),
+
               const SizedBox(height: 12),
+
               DropdownButtonFormField<String>(
                 isExpanded: true,
                 value: brand,
@@ -662,22 +715,27 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                     .toList(),
                 onChanged: loading
                     ? null
-                    : (v) => setState(() => brand = v ?? (normalBrands.isNotEmpty ? normalBrands.first : 'Diğer')),
+                    : (v) => setState(
+                      () => brand =
+                      v ?? (normalBrands.isNotEmpty ? normalBrands.first : 'Diğer'),
+                ),
               ),
+
               const SizedBox(height: 12),
             ],
 
             const SizedBox(height: 16),
             const _SectionTitle('Fotoğraflar'),
 
-            // ✅ YENİ: Galeri + Kamera butonları
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: loading ? null : pickPhotos,
                     icon: const Icon(Icons.photo_library),
-                    label: Text(pickedBytes.isEmpty ? 'Foto Seç' : 'Galeri (${pickedBytes.length})'),
+                    label: Text(
+                      pickedBytes.isEmpty ? 'Foto Seç' : 'Galeri (${pickedBytes.length})',
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -727,7 +785,11 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                               color: Colors.black.withOpacity(0.55),
                               borderRadius: BorderRadius.circular(999),
                             ),
-                            child: const Icon(Icons.close, color: Colors.white, size: 16),
+                            child: const Icon(
+                              Icons.close,
+                              color: Colors.white,
+                              size: 16,
+                            ),
                           ),
                         ),
                       ),
@@ -736,14 +798,21 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
                           bottom: 6,
                           left: 6,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.black.withOpacity(0.55),
                               borderRadius: BorderRadius.circular(999),
                             ),
                             child: const Text(
                               'Kapak',
-                              style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         ),
@@ -768,6 +837,7 @@ class _MarketIlanEklePageState extends State<MarketIlanEklePage> {
 
 class _SectionTitle extends StatelessWidget {
   final String text;
+
   const _SectionTitle(this.text);
 
   @override

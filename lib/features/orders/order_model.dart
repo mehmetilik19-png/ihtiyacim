@@ -18,8 +18,10 @@ class OrderItem {
       productId: (map['productId'] ?? '').toString(),
       title: (map['title'] ?? '').toString(),
       price: (map['price'] ?? 0).toDouble(),
-      qty: (map['qty'] ?? 1) as int,
-      imageUrl: map['imageUrl'] as String?,
+      qty: (map['qty'] ?? 1) is int
+          ? map['qty'] as int
+          : int.tryParse((map['qty'] ?? '1').toString()) ?? 1,
+      imageUrl: map['imageUrl']?.toString(),
     );
   }
 
@@ -56,7 +58,7 @@ class ShippingAddress {
       line1: (map['line1'] ?? '').toString(),
       city: (map['city'] ?? '').toString(),
       district: (map['district'] ?? '').toString(),
-      zip: map['zip'] as String?,
+      zip: map['zip']?.toString(),
     );
   }
 
@@ -70,7 +72,19 @@ class ShippingAddress {
   }..removeWhere((k, v) => v == null);
 }
 
-enum OrderStatus { created, preparing, shipped, delivered, cancelled }
+enum OrderStatus {
+  created,
+  preparing,
+  shipped,
+  delivered,
+  returnRequested,
+  returnApproved,
+  returnRejected,
+  returnShipping,
+  returnCompleted,
+  archived,
+  cancelled,
+}
 
 OrderStatus orderStatusFromString(String s) {
   switch (s) {
@@ -80,6 +94,18 @@ OrderStatus orderStatusFromString(String s) {
       return OrderStatus.shipped;
     case 'delivered':
       return OrderStatus.delivered;
+    case 'return_requested':
+      return OrderStatus.returnRequested;
+    case 'return_approved':
+      return OrderStatus.returnApproved;
+    case 'return_rejected':
+      return OrderStatus.returnRejected;
+    case 'return_shipping':
+      return OrderStatus.returnShipping;
+    case 'return_completed':
+      return OrderStatus.returnCompleted;
+    case 'archived':
+      return OrderStatus.archived;
     case 'cancelled':
       return OrderStatus.cancelled;
     case 'created':
@@ -89,13 +115,30 @@ OrderStatus orderStatusFromString(String s) {
 }
 
 String orderStatusToString(OrderStatus s) {
-  return switch (s) {
-    OrderStatus.created => 'created',
-    OrderStatus.preparing => 'preparing',
-    OrderStatus.shipped => 'shipped',
-    OrderStatus.delivered => 'delivered',
-    OrderStatus.cancelled => 'cancelled',
-  };
+  switch (s) {
+    case OrderStatus.created:
+      return 'created';
+    case OrderStatus.preparing:
+      return 'preparing';
+    case OrderStatus.shipped:
+      return 'shipped';
+    case OrderStatus.delivered:
+      return 'delivered';
+    case OrderStatus.returnRequested:
+      return 'return_requested';
+    case OrderStatus.returnApproved:
+      return 'return_approved';
+    case OrderStatus.returnRejected:
+      return 'return_rejected';
+    case OrderStatus.returnShipping:
+      return 'return_shipping';
+    case OrderStatus.returnCompleted:
+      return 'return_completed';
+    case OrderStatus.archived:
+      return 'archived';
+    case OrderStatus.cancelled:
+      return 'cancelled';
+  }
 }
 
 class OrderModel {
@@ -113,6 +156,23 @@ class OrderModel {
   final int createdAt;
   final int updatedAt;
 
+  final int? shippedAt;
+  final int? deliveredAt;
+  final int? returnDeadline;
+
+  final String? returnReason;
+  final int? returnRequestedAt;
+  final String? returnAdminNote;
+  final int? returnApprovedAt;
+  final int? returnRejectedAt;
+  final String? returnTrackingCompany;
+  final String? returnTrackingNo;
+  final int? returnShippingAt;
+  final int? returnCompletedAt;
+
+  final bool archived;
+  final int? archivedAt;
+
   const OrderModel({
     required this.orderId,
     required this.buyerId,
@@ -125,7 +185,39 @@ class OrderModel {
     required this.updatedAt,
     this.trackingCompany,
     this.trackingNo,
+    this.shippedAt,
+    this.deliveredAt,
+    this.returnDeadline,
+    this.returnReason,
+    this.returnRequestedAt,
+    this.returnAdminNote,
+    this.returnApprovedAt,
+    this.returnRejectedAt,
+    this.returnTrackingCompany,
+    this.returnTrackingNo,
+    this.returnShippingAt,
+    this.returnCompletedAt,
+    this.archived = false,
+    this.archivedAt,
   });
+
+  static int _intVal(dynamic v) {
+    if (v is int) return v;
+    if (v is double) return v.round();
+    return int.tryParse((v ?? '0').toString()) ?? 0;
+  }
+
+  static int? _nullableInt(dynamic v) {
+    if (v == null) return null;
+    final i = _intVal(v);
+    return i == 0 ? null : i;
+  }
+
+  static double _doubleVal(dynamic v) {
+    if (v is double) return v;
+    if (v is int) return v.toDouble();
+    return double.tryParse((v ?? '0').toString()) ?? 0;
+  }
 
   factory OrderModel.fromMap(String orderId, Map<dynamic, dynamic> map) {
     final itemsRaw = (map['items'] as List?) ?? [];
@@ -133,18 +225,37 @@ class OrderModel {
         .map((e) => OrderItem.fromMap(Map<dynamic, dynamic>.from(e as Map)))
         .toList();
 
+    final rawAddress = map['address'];
+    final addressMap = rawAddress is Map
+        ? Map<dynamic, dynamic>.from(rawAddress)
+        : <dynamic, dynamic>{};
+
     return OrderModel(
       orderId: orderId,
       buyerId: (map['buyerId'] ?? '').toString(),
       buyerEmail: (map['buyerEmail'] ?? '').toString(),
       items: items,
-      address: ShippingAddress.fromMap(Map<dynamic, dynamic>.from(map['address'] as Map)),
-      grandTotal: (map['grandTotal'] ?? 0).toDouble(),
+      address: ShippingAddress.fromMap(addressMap),
+      grandTotal: _doubleVal(map['grandTotal']),
       status: orderStatusFromString((map['status'] ?? 'created').toString()),
-      trackingCompany: map['trackingCompany'] as String?,
-      trackingNo: map['trackingNo'] as String?,
-      createdAt: (map['createdAt'] ?? 0) as int,
-      updatedAt: (map['updatedAt'] ?? 0) as int,
+      trackingCompany: map['trackingCompany']?.toString(),
+      trackingNo: map['trackingNo']?.toString(),
+      createdAt: _intVal(map['createdAt']),
+      updatedAt: _intVal(map['updatedAt']),
+      shippedAt: _nullableInt(map['shippedAt']),
+      deliveredAt: _nullableInt(map['deliveredAt']),
+      returnDeadline: _nullableInt(map['returnDeadline']),
+      returnReason: map['returnReason']?.toString(),
+      returnRequestedAt: _nullableInt(map['returnRequestedAt']),
+      returnAdminNote: map['returnAdminNote']?.toString(),
+      returnApprovedAt: _nullableInt(map['returnApprovedAt']),
+      returnRejectedAt: _nullableInt(map['returnRejectedAt']),
+      returnTrackingCompany: map['returnTrackingCompany']?.toString(),
+      returnTrackingNo: map['returnTrackingNo']?.toString(),
+      returnShippingAt: _nullableInt(map['returnShippingAt']),
+      returnCompletedAt: _nullableInt(map['returnCompletedAt']),
+      archived: map['archived'] == true,
+      archivedAt: _nullableInt(map['archivedAt']),
     );
   }
 
@@ -160,12 +271,25 @@ class OrderModel {
     'trackingNo': trackingNo,
     'createdAt': createdAt,
     'updatedAt': updatedAt,
+    'shippedAt': shippedAt,
+    'deliveredAt': deliveredAt,
+    'returnDeadline': returnDeadline,
+    'returnReason': returnReason,
+    'returnRequestedAt': returnRequestedAt,
+    'returnAdminNote': returnAdminNote,
+    'returnApprovedAt': returnApprovedAt,
+    'returnRejectedAt': returnRejectedAt,
+    'returnTrackingCompany': returnTrackingCompany,
+    'returnTrackingNo': returnTrackingNo,
+    'returnShippingAt': returnShippingAt,
+    'returnCompletedAt': returnCompletedAt,
+    'archived': archived,
+    'archivedAt': archivedAt,
   }..removeWhere((k, v) => v == null);
 }
+
 String orderStatusText(dynamic status) {
   final s = status is String ? status : status.toString();
-
-  // enum gelirse: OrderStatus.created gibi
   final normalized = s.contains('.') ? s.split('.').last : s;
 
   switch (normalized) {
@@ -177,6 +301,23 @@ String orderStatusText(dynamic status) {
       return 'Kargoya verildi';
     case 'delivered':
       return 'Teslim edildi';
+    case 'returnRequested':
+    case 'return_requested':
+      return 'İade talebi var';
+    case 'returnApproved':
+    case 'return_approved':
+      return 'İade onaylandı';
+    case 'returnRejected':
+    case 'return_rejected':
+      return 'İade reddedildi';
+    case 'returnShipping':
+    case 'return_shipping':
+      return 'İade kargoda';
+    case 'returnCompleted':
+    case 'return_completed':
+      return 'İade tamamlandı';
+    case 'archived':
+      return 'Arşiv';
     case 'cancelled':
       return 'İptal edildi';
     default:

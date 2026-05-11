@@ -20,22 +20,64 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
   final _titleC = TextEditingController();
   final _descC = TextEditingController();
 
-  String? selectedKategori;
+  String selectedAnaKategori = 'Beyaz Eşya';
+  String? selectedAltKategori;
   String? selectedSehir;
 
-  // ✅ YENİ: Ücretsiz / Takas
-  String _tradeType = 'free'; // free | swap
+  String _tradeType = 'free';
 
-  static const List<String> kategoriler = [
-    'Mobilya',
-    'Beyaz Eşya',
-    'Elektronik',
-    'Kıyafet',
-    'Oyuncak',
-    'Kitap',
-    'Çocuk Odası',
-    'Diğer',
-  ];
+  final Map<String, List<String>> kategoriMap = const {
+    'Beyaz Eşya': [
+      'Buzdolabı',
+      'Çamaşır Makinesi',
+      'Bulaşık Makinesi',
+      'Fırın',
+      'Ocak',
+      'Derin Dondurucu',
+    ],
+    'Mobilya': [
+      'Koltuk',
+      'Kanepe',
+      'Yatak',
+      'Masa',
+      'Sandalye',
+      'Dolap',
+    ],
+    'Elektronik': [
+      'Telefon',
+      'Tablet',
+      'Bilgisayar',
+      'Televizyon',
+      'Küçük Ev Aleti',
+    ],
+    'Giyim': [
+      'Kadın',
+      'Erkek',
+      'Çocuk',
+      'Ayakkabı',
+      'Mont',
+    ],
+    'Mutfak': [
+      'Tencere',
+      'Tabak',
+      'Bardak',
+      'Çatal Kaşık',
+      'Mutfak Robotu',
+    ],
+    'Kitap': [
+      'Roman',
+      'Ders Kitabı',
+      'Çocuk Kitabı',
+      'Kırtasiye',
+    ],
+    'Diğer': [
+      'Oyuncak',
+      'Bebek Ürünü',
+      'Spor',
+      'Bahçe',
+      'Diğer',
+    ],
+  };
 
   static const List<String> sehirler = [
     'Adana','Adıyaman','Afyonkarahisar','Ağrı','Amasya','Ankara','Antalya','Artvin','Aydın',
@@ -58,6 +100,7 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
   Future<void> _pickMultiImages() async {
     final images = await _picker.pickMultiImage(imageQuality: 80);
     if (images.isEmpty) return;
+
     setState(() {
       _pickedFiles.addAll(images.map((e) => File(e.path)));
     });
@@ -71,14 +114,17 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
       _snack('Başlık ve açıklama zorunlu');
       return;
     }
-    if (selectedKategori == null) {
-      _snack('Kategori seç');
+
+    if (selectedAltKategori == null) {
+      _snack('Alt kategori seç');
       return;
     }
+
     if (selectedSehir == null) {
       _snack('Şehir seç');
       return;
     }
+
     if (_pickedFiles.isEmpty) {
       _snack('En az 1 foto seç');
       return;
@@ -96,23 +142,26 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
       final photoUrls = await _imageService.uploadMultiple(_pickedFiles);
 
       final ref = _dbRef.push();
+
       final ilan = IlanModel(
         id: ref.key ?? '',
         title: title,
-        category: selectedKategori!,
+        category: selectedAltKategori!,
         city: selectedSehir!,
         desc: desc,
         createdAt: DateTime.now().millisecondsSinceEpoch,
         photoUrls: photoUrls,
-
         ownerId: user.uid,
         status: 'active',
-
-        // ✅ YENİ: Ücretsiz / Takas
         tradeType: _tradeType,
       );
 
-      await ref.set(ilan.toMap());
+      await ref.set({
+        ...ilan.toMap(),
+        'mainCategory': selectedAnaKategori,
+        'subCategory': selectedAltKategori,
+      });
+
       _snack('İlan eklendi');
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -172,6 +221,8 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
 
   @override
   Widget build(BuildContext context) {
+    final altKategoriler = kategoriMap[selectedAnaKategori] ?? [];
+
     return Scaffold(
       appBar: AppBar(title: const Text('İlan Ekle')),
       body: SingleChildScrollView(
@@ -183,21 +234,42 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
               enabled: !_saving,
               decoration: const InputDecoration(labelText: 'Başlık'),
             ),
+
             const SizedBox(height: 10),
 
-            // ✅ YENİ: Ücretsiz / Takas seçimi
             _tradeTypeSelector(),
+
             const SizedBox(height: 10),
 
             DropdownButtonFormField<String>(
-              value: selectedKategori,
-              decoration: const InputDecoration(labelText: 'Kategori'),
-              items: kategoriler
+              value: selectedAnaKategori,
+              decoration: const InputDecoration(labelText: 'Ana Kategori'),
+              items: kategoriMap.keys
                   .map((k) => DropdownMenuItem(value: k, child: Text(k)))
                   .toList(),
-              onChanged: _saving ? null : (v) => setState(() => selectedKategori = v),
+              onChanged: _saving
+                  ? null
+                  : (v) {
+                setState(() {
+                  selectedAnaKategori = v!;
+                  selectedAltKategori = null;
+                });
+              },
             ),
+
             const SizedBox(height: 10),
+
+            DropdownButtonFormField<String>(
+              value: selectedAltKategori,
+              decoration: const InputDecoration(labelText: 'Alt Kategori'),
+              items: altKategoriler
+                  .map((k) => DropdownMenuItem(value: k, child: Text(k)))
+                  .toList(),
+              onChanged: _saving ? null : (v) => setState(() => selectedAltKategori = v),
+            ),
+
+            const SizedBox(height: 10),
+
             DropdownButtonFormField<String>(
               value: selectedSehir,
               decoration: const InputDecoration(labelText: 'Şehir'),
@@ -206,26 +278,32 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
                   .toList(),
               onChanged: _saving ? null : (v) => setState(() => selectedSehir = v),
             ),
+
             const SizedBox(height: 10),
+
             TextField(
               controller: _descC,
               enabled: !_saving,
               maxLines: 3,
               decoration: const InputDecoration(labelText: 'Açıklama'),
             ),
+
             const SizedBox(height: 12),
+
             Row(
               children: [
                 ElevatedButton.icon(
                   onPressed: _saving ? null : _pickMultiImages,
                   icon: const Icon(Icons.photo_library),
-                  label: const Text('Foto Seç (Çoklu)'),
+                  label: const Text('Foto Seç'),
                 ),
                 const SizedBox(width: 12),
                 Text('${_pickedFiles.length} foto'),
               ],
             ),
+
             const SizedBox(height: 12),
+
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(

@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_database/firebase_database.dart';
 
 import 'package:ihtiyacim/game/quiz_engine.dart';
 import 'package:ihtiyacim/game/quiz_repo.dart';
@@ -21,6 +24,11 @@ class _OyunPageState extends State<OyunPage> {
   static const int _questionDuration = 20;
   static const int _maxLives = 4;
 
+  static const Color _bg = Color(0xFF0B1020);
+  static const Color _card = Color(0xFF1C2233);
+  static const Color _softCard = Color(0xFF22283A);
+  static const Color _beige = Color(0xFFD8B982);
+
   bool _loading = true;
   bool _locked = false;
 
@@ -36,6 +44,9 @@ class _OyunPageState extends State<OyunPage> {
   int _bestStreak = 0;
 
   String _infoText = '20 saniye içinde doğru cevabı bul.';
+
+  int? _jackpotQuestion;
+  bool _jackpotShown = false;
 
   @override
   void initState() {
@@ -57,6 +68,18 @@ class _OyunPageState extends State<OyunPage> {
     super.dispose();
   }
 
+  void _decideJackpotQuestion() {
+    final r = Random().nextInt(100);
+
+    if (r < 35) {
+      _jackpotQuestion = Random().nextInt(20) + 1;
+    } else {
+      _jackpotQuestion = null;
+    }
+
+    _jackpotShown = false;
+  }
+
   Future<void> _boot() async {
     await engine.init();
     await engine.resetRun();
@@ -65,11 +88,10 @@ class _OyunPageState extends State<OyunPage> {
     engine.lastSelectedIndex = null;
     engine.lastCorrectIndex = null;
 
+    _decideJackpotQuestion();
     _resetQuestionState();
 
-    if (mounted) {
-      setState(() => _loading = false);
-    }
+    if (mounted) setState(() => _loading = false);
   }
 
   void _resetQuestionState() {
@@ -94,6 +116,23 @@ class _OyunPageState extends State<OyunPage> {
     });
 
     if (mounted) setState(() {});
+  }
+
+  Future<void> _maybeShowJackpot() async {
+    if (_jackpotShown) return;
+    if (_jackpotQuestion == null) return;
+
+    final currentQuestionNumber = engine.pos + 1;
+    if (currentQuestionNumber != _jackpotQuestion) return;
+
+    _jackpotShown = true;
+    _timer?.cancel();
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const _JackpotDialog(),
+    );
   }
 
   Future<void> _handleTimeout() async {
@@ -134,6 +173,7 @@ class _OyunPageState extends State<OyunPage> {
 
     if (engine.lastWasCorrect == true) {
       _streak++;
+
       if (_streak > _bestStreak) {
         _bestStreak = _streak;
       }
@@ -157,7 +197,9 @@ class _OyunPageState extends State<OyunPage> {
     if (!mounted) return;
     setState(() {});
 
-    await Future.delayed(const Duration(milliseconds: 900));
+    await _maybeShowJackpot();
+
+    await Future.delayed(const Duration(milliseconds: 700));
     if (!mounted) return;
 
     if (engine.isGameOver || engine.lives <= 0) {
@@ -211,8 +253,137 @@ class _OyunPageState extends State<OyunPage> {
     _resetQuestionState();
   }
 
+  int _calculateScore() {
+    return (engine.totalCorrect * 100) + (_bestStreak * 25);
+  }
+
+  Future<Map<String, dynamic>> _saveScoreAndGetRank(int score) async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      return {
+        'rank': 1,
+        'total': 1,
+        'players': <Map<String, dynamic>>[
+          {
+            'uid': 'guest',
+            'name': 'Sen',
+            'score': score,
+            'rank': 1,
+          },
+        ],
+      };
+    }
+
+    final leaderboardRef = FirebaseDatabase.instance.ref('quiz_leaderboard');
+    final userRef = leaderboardRef.child(user.uid);
+
+    final oldSnap = await userRef.get();
+
+    int oldBestScore = 0;
+
+    if (oldSnap.exists && oldSnap.value is Map) {
+      final oldData = Map<dynamic, dynamic>.from(oldSnap.value as Map);
+      oldBestScore = oldData['score'] is int
+          ? oldData['score']
+          : int.tryParse('${oldData['score']}') ?? 0;
+    }
+
+    final bestScore = score > oldBestScore ? score : oldBestScore;
+    final userName = user.displayName ?? user.email?.split('@').first ?? 'Oyuncu';
+
+    await userRef.set({
+      'uid': user.uid,
+      'name': userName,
+      'score': bestScore,
+      'correct': engine.totalCorrect,
+      'bestStreak': _bestStreak,
+      'updatedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+
+    final snap = await leaderboardRef.get();
+
+    if (!snap.exists || snap.value == null) {
+      return {
+        'rank': 1,
+        'total': 1,
+        'players': <Map<String, dynamic>>[
+          {
+            'uid': user.uid,
+            'name': userName,
+            'score': bestScore,
+            'rank': 1,
+          },
+        ],
+      };
+    }
+
+    final data = Map<dynamic, dynamic>.from(snap.value as Map);
+    final players = <Map<String, dynamic>>[];
+
+    for (final value in data.values) {
+      if (value is Map) {
+        final player = Map<dynamic, dynamic>.from(value);
+
+        final playerScore = player['score'] is int
+            ? player['score']
+            : int.tryParse('${player['score']}') ?? 0;
+
+        players.add({
+          'uid': '${player['uid'] ?? ''}',
+          'name': '${player['name'] ?? 'Oyuncu'}',
+          'score': playerScore,
+          'updatedAt': player['updatedAt'] ?? 0,
+        });
+      }
+    }
+
+    players.sort((a, b) {
+      final scoreA = a['score'] as int;
+      final scoreB = b['score'] as int;
+
+      if (scoreB != scoreA) {
+        return scoreB.compareTo(scoreA);
+      }
+
+      final updatedA = a['updatedAt'] is int
+          ? a['updatedAt'] as int
+          : int.tryParse('${a['updatedAt']}') ?? 0;
+
+      final updatedB = b['updatedAt'] is int
+          ? b['updatedAt'] as int
+          : int.tryParse('${b['updatedAt']}') ?? 0;
+
+      return updatedA.compareTo(updatedB);
+    });
+
+    int myRank = 1;
+
+    for (int i = 0; i < players.length; i++) {
+      players[i]['rank'] = i + 1;
+
+      if (players[i]['uid'] == user.uid) {
+        myRank = i + 1;
+      }
+    }
+
+    return {
+      'rank': myRank,
+      'total': players.length,
+      'players': players,
+    };
+  }
+
   Future<void> _showGameOver() async {
     _timer?.cancel();
+
+    final score = _calculateScore();
+    final rankData = await _saveScoreAndGetRank(score);
+
+    final newRank = rankData['rank'] ?? 1;
+    final totalPlayers = rankData['total'] ?? 1;
+    final passed = totalPlayers - newRank;
+    final players = List<Map<String, dynamic>>.from(rankData['players'] ?? []);
 
     await showDialog<void>(
       context: context,
@@ -224,100 +395,218 @@ class _OyunPageState extends State<OyunPage> {
         ),
         child: Padding(
           padding: const EdgeInsets.all(22),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.emoji_events_rounded,
-                color: Color(0xFF53D8FB),
-                size: 42,
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Tur Bitti',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.emoji_events_rounded,
+                  color: _beige,
+                  size: 46,
                 ),
-              ),
-              const SizedBox(height: 14),
-              _resultRow('Bu tur doğru', '${engine.totalCorrect}'),
-              const SizedBox(height: 8),
-              _resultRow('Toplam doğru', '${engine.seasonCorrect}'),
-              const SizedBox(height: 8),
-              _resultRow('En yüksek seri', '$_bestStreak'),
-              const SizedBox(height: 8),
-              _resultRow('Lig', engine.currentLeagueName),
-              const SizedBox(height: 8),
-              _resultRow('Sıralama', '${engine.currentRank} / 50'),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    Navigator.pop(ctx);
+                const SizedBox(height: 12),
+                const Text(
+                  'Tur Bitti',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 25,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 16),
 
-                    if (mounted) {
-                      setState(() => _loading = true);
-                    }
-
-                    _timeJoker = 1;
-                    _passJoker = 1;
-                    _streak = 0;
-                    _bestStreak = 0;
-
-                    await engine.resetRun();
-
-                    engine.lastWasCorrect = null;
-                    engine.lastSelectedIndex = null;
-                    engine.lastCorrectIndex = null;
-
-                    _resetQuestionState();
-
-                    if (mounted) {
-                      setState(() => _loading = false);
-                    }
+                TweenAnimationBuilder<int>(
+                  tween: IntTween(begin: totalPlayers, end: newRank),
+                  duration: const Duration(milliseconds: 1800),
+                  builder: (context, value, _) {
+                    return Text(
+                      '$value. sıra',
+                      style: const TextStyle(
+                        color: _beige,
+                        fontSize: 36,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    );
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF5B6CFF),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                ),
+
+                const SizedBox(height: 8),
+
+                Text(
+                  '$totalPlayers kişi içinde',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.65),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                _resultRow('Doğru Sayısı', '${engine.totalCorrect}'),
+                const SizedBox(height: 8),
+                _resultRow('En iyi seri', '$_bestStreak'),
+                const SizedBox(height: 8),
+                _resultRow('Toplam puan', '$score'),
+                const SizedBox(height: 8),
+                _resultRow('Geçtiğin kişi', '$passed kişi'),
+
+                const SizedBox(height: 16),
+
+                Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxHeight: 240),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF22283A),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.08),
                     ),
                   ),
-                  child: const Text(
-                    'Yeni Tur Başlat',
+                  child: players.isEmpty
+                      ? Text(
+                    'Henüz sıralama yok.',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      fontSize: 16,
+                      color: Colors.white.withOpacity(0.65),
                       fontWeight: FontWeight.w700,
                     ),
+                  )
+                      : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: players.length,
+                    itemBuilder: (context, index) {
+                      final player = players[index];
+                      final isMe = player['uid'] ==
+                          FirebaseAuth.instance.currentUser?.uid;
+
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: isMe
+                              ? _beige.withOpacity(0.18)
+                              : Colors.white.withOpacity(0.04),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isMe
+                                ? _beige.withOpacity(0.45)
+                                : Colors.white.withOpacity(0.05),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 36,
+                              child: Text(
+                                '${player['rank']}.',
+                                style: const TextStyle(
+                                  color: _beige,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                '${player['name']}',
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              '${player['score']}',
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.72),
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ),
-              ),
-              const SizedBox(height: 10),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: OutlinedButton(
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    Navigator.pop(context);
-                  },
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(
-                      color: Colors.white.withOpacity(0.16),
+
+                const SizedBox(height: 20),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+
+                      if (mounted) {
+                        setState(() => _loading = true);
+                      }
+
+                      _timeJoker = 1;
+                      _passJoker = 1;
+                      _streak = 0;
+                      _bestStreak = 0;
+
+                      await engine.resetRun();
+
+                      engine.lastWasCorrect = null;
+                      engine.lastSelectedIndex = null;
+                      engine.lastCorrectIndex = null;
+
+                      _decideJackpotQuestion();
+                      _resetQuestionState();
+
+                      if (mounted) {
+                        setState(() => _loading = false);
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _beige,
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                    child: const Text(
+                      'Yeni Tur Başlat',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
-                  child: const Text('Ana Sayfaya Dön'),
                 ),
-              ),
-            ],
+
+                const SizedBox(height: 10),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: OutlinedButton(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      Navigator.pop(context);
+                    },
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: BorderSide(
+                        color: Colors.white.withOpacity(0.16),
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: const Text('Ana Sayfaya Dön'),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -341,7 +630,7 @@ class _OyunPageState extends State<OyunPage> {
           style: const TextStyle(
             color: Colors.white,
             fontSize: 15,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
           ),
         ),
       ],
@@ -349,9 +638,7 @@ class _OyunPageState extends State<OyunPage> {
   }
 
   Color _optionColor(int index) {
-    if (engine.lastWasCorrect == null) {
-      return Colors.white.withOpacity(0.08);
-    }
+    if (engine.lastWasCorrect == null) return _card;
 
     final selected = engine.lastSelectedIndex;
     final correct = engine.lastCorrectIndex;
@@ -360,24 +647,23 @@ class _OyunPageState extends State<OyunPage> {
     if (selected == index && selected != correct) {
       return const Color(0xFFC14D5A);
     }
-    return Colors.white.withOpacity(0.08);
+
+    return _card;
   }
 
   Color _timerColor() {
     if (_remaining <= 5) return const Color(0xFFFF6B6B);
     if (_remaining <= 10) return const Color(0xFFFFB84D);
-    return const Color(0xFF4DD8FF);
+    return _beige;
   }
 
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        backgroundColor: Color(0xFF0B1020),
+        backgroundColor: _bg,
         body: Center(
-          child: CircularProgressIndicator(
-            color: Color(0xFF5B6CFF),
-          ),
+          child: CircularProgressIndicator(color: _beige),
         ),
       );
     }
@@ -385,7 +671,7 @@ class _OyunPageState extends State<OyunPage> {
     final q = engine.current;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0B1020),
+      backgroundColor: _bg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -393,7 +679,7 @@ class _OyunPageState extends State<OyunPage> {
         centerTitle: true,
         title: const Text(
           'Oyun',
-          style: TextStyle(fontWeight: FontWeight.w700),
+          style: TextStyle(fontWeight: FontWeight.w800),
         ),
         actions: [
           IconButton(
@@ -413,8 +699,6 @@ class _OyunPageState extends State<OyunPage> {
           padding: const EdgeInsets.fromLTRB(14, 6, 14, 12),
           child: Column(
             children: [
-              _LeagueCard(engine: engine),
-              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
@@ -442,16 +726,16 @@ class _OyunPageState extends State<OyunPage> {
                   ),
                 ],
               ),
+
               const SizedBox(height: 8),
+
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
-                  color: Colors.white.withOpacity(0.08),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.10),
-                  ),
+                  color: _softCard,
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
                 ),
                 child: Row(
                   children: [
@@ -474,22 +758,22 @@ class _OyunPageState extends State<OyunPage> {
                       style: TextStyle(
                         color: _timerColor(),
                         fontSize: 14,
-                        fontWeight: FontWeight.w800,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
                   ],
                 ),
               ),
+
               const SizedBox(height: 8),
+
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(13),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(20),
-                  color: Colors.white.withOpacity(0.08),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.10),
-                  ),
+                  color: _softCard,
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -497,36 +781,36 @@ class _OyunPageState extends State<OyunPage> {
                     Text(
                       q.category,
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.60),
+                        color: _beige.withOpacity(0.85),
                         fontSize: 11,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       q.question,
-                      maxLines: 2,
+                      maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        height: 1.28,
+                        fontWeight: FontWeight.w900,
+                        height: 1.24,
                       ),
                     ),
                   ],
                 ),
               ),
+
               const SizedBox(height: 8),
+
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(15),
-                  color: const Color(0xFF182241),
-                  border: Border.all(
-                    color: const Color(0xFF2A3A6A),
-                  ),
+                  color: const Color(0xFF191F31),
+                  border: Border.all(color: _beige.withOpacity(0.25)),
                 ),
                 child: Text(
                   _infoText,
@@ -535,11 +819,13 @@ class _OyunPageState extends State<OyunPage> {
                   style: const TextStyle(
                     color: Colors.white70,
                     fontSize: 13,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
               ),
+
               const SizedBox(height: 8),
+
               Expanded(
                 child: Column(
                   children: List.generate(q.options.length, (index) {
@@ -550,7 +836,7 @@ class _OyunPageState extends State<OyunPage> {
                     return Expanded(
                       child: Padding(
                         padding: EdgeInsets.only(
-                          bottom: index == q.options.length - 1 ? 0 : 8,
+                          bottom: index == q.options.length - 1 ? 0 : 7,
                         ),
                         child: InkWell(
                           onTap: _locked ? null : () => _handleTap(index),
@@ -559,32 +845,32 @@ class _OyunPageState extends State<OyunPage> {
                             duration: const Duration(milliseconds: 180),
                             width: double.infinity,
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
+                              horizontal: 12,
+                              vertical: 8,
                             ),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(18),
                               color: _optionColor(index),
                               border: Border.all(
-                                color: Colors.white.withOpacity(0.10),
+                                color: Colors.white.withOpacity(0.08),
                               ),
                             ),
                             child: Row(
                               children: [
                                 Container(
-                                  width: 34,
-                                  height: 34,
+                                  width: 32,
+                                  height: 32,
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: Colors.white.withOpacity(0.10),
+                                    color: _beige.withOpacity(0.18),
                                   ),
                                   child: Text(
                                     ['A', 'B', 'C', 'D'][index],
                                     style: const TextStyle(
                                       color: Colors.white,
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 15,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 14,
                                     ),
                                   ),
                                 ),
@@ -596,9 +882,9 @@ class _OyunPageState extends State<OyunPage> {
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       color: Colors.white,
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w700,
-                                      height: 1.25,
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w800,
+                                      height: 1.20,
                                     ),
                                   ),
                                 ),
@@ -611,7 +897,9 @@ class _OyunPageState extends State<OyunPage> {
                   }),
                 ),
               ),
+
               const SizedBox(height: 8),
+
               Row(
                 children: [
                   Expanded(
@@ -650,104 +938,6 @@ class _OyunPageState extends State<OyunPage> {
   }
 }
 
-class _LeagueCard extends StatelessWidget {
-  final QuizEngine engine;
-
-  const _LeagueCard({required this.engine});
-
-  @override
-  Widget build(BuildContext context) {
-    final nextLeague = engine.nextLeagueName;
-    final needed = engine.questionsToNextLeague;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: Colors.white.withOpacity(0.07),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.08),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  color: engine.leagueColor.withOpacity(0.18),
-                ),
-                child: Text(
-                  engine.currentLeagueName,
-                  style: TextStyle(
-                    color: engine.leagueColor,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'Sıra ${engine.currentRank}/50',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.80),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Toplam doğru: ${engine.seasonCorrect}',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.78),
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'İlk 10 kişi üst lige çıkar',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.68),
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: engine.leagueProgress,
-              minHeight: 6,
-              backgroundColor: Colors.white.withOpacity(0.08),
-              valueColor: AlwaysStoppedAnimation(engine.leagueColor),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            needed <= 0
-                ? 'Üst lige çıkmaya hazırsın: $nextLeague'
-                : '$nextLeague için $needed soru daha gerekiyor',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _TopMiniCard extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -761,35 +951,35 @@ class _TopMiniCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const beige = Color(0xFFD8B982);
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: Colors.white.withOpacity(0.06),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.08),
-        ),
+        color: const Color(0xFF1C2233),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: Colors.white70, size: 17),
-          const SizedBox(height: 6),
+          Icon(icon, color: beige, size: 17),
+          const SizedBox(height: 5),
           Text(
             title,
             style: TextStyle(
               color: Colors.white.withOpacity(0.62),
               fontSize: 11,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 1),
           Text(
             value,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 16,
-              fontWeight: FontWeight.w800,
+              fontWeight: FontWeight.w900,
             ),
           ),
         ],
@@ -816,21 +1006,21 @@ class _JokerButton extends StatelessWidget {
     final enabled = count > 0;
 
     return SizedBox(
-      height: 46,
+      height: 44,
       child: ElevatedButton.icon(
         onPressed: enabled ? onTap : null,
         icon: Icon(icon, size: 16),
         label: Text(
           '$text ($count)',
           style: const TextStyle(
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
             fontSize: 11,
           ),
         ),
         style: ElevatedButton.styleFrom(
           elevation: 0,
           backgroundColor: enabled
-              ? Colors.white.withOpacity(0.10)
+              ? const Color(0xFFD8B982).withOpacity(0.22)
               : Colors.white.withOpacity(0.04),
           foregroundColor: Colors.white,
           disabledForegroundColor: Colors.white38,
@@ -839,6 +1029,151 @@ class _JokerButton extends StatelessWidget {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _JackpotDialog extends StatefulWidget {
+  const _JackpotDialog();
+
+  @override
+  State<_JackpotDialog> createState() => _JackpotDialogState();
+}
+
+class _JackpotDialogState extends State<_JackpotDialog> {
+  int? selectedIndex;
+  bool opened = false;
+
+  Future<void> _openCard(int index) async {
+    if (opened) return;
+
+    setState(() {
+      selectedIndex = index;
+      opened = true;
+    });
+
+    await Future.delayed(const Duration(milliseconds: 900));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF151A2F),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.card_giftcard_rounded,
+              color: Color(0xFFD8B982),
+              size: 44,
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Jackpot Fırsatı',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 23,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              opened
+                  ? 'Bu tur ödül çıkmadı.\nBir sonraki turda tekrar dene!'
+                  : 'Bir kart seç ve şansını dene.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.70),
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+                height: 1.35,
+              ),
+            ),
+            const SizedBox(height: 16),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: 16,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+              ),
+              itemBuilder: (context, index) {
+                final isSelected = selectedIndex == index;
+
+                return GestureDetector(
+                  onTap: () => _openCard(index),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 350),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFFD8B982)
+                          : const Color(0xFF22283A),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isSelected
+                            ? Colors.white
+                            : Colors.white.withOpacity(0.10),
+                      ),
+                    ),
+                    child: Center(
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        child: isSelected
+                            ? const Text(
+                          'BOŞ',
+                          key: ValueKey('empty'),
+                          style: TextStyle(
+                            color: Colors.black,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        )
+                            : const Text(
+                          '?',
+                          key: ValueKey('question'),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              height: 46,
+              child: ElevatedButton(
+                onPressed: opened ? () => Navigator.pop(context) : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFD8B982),
+                  foregroundColor: Colors.black,
+                  disabledBackgroundColor: Colors.white.withOpacity(0.08),
+                  disabledForegroundColor: Colors.white38,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+                child: const Text(
+                  'Devam Et',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

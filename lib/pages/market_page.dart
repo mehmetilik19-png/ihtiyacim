@@ -60,9 +60,11 @@ class _MarketPageState extends State<MarketPage> {
       final raw = event.snapshot.value;
       if (raw is! Map) return <String>{};
       final ids = <String>{};
+
       raw.forEach((k, v) {
         if (v != null && v != false) ids.add(k.toString());
       });
+
       return ids;
     });
   }
@@ -95,7 +97,6 @@ class _MarketPageState extends State<MarketPage> {
     _snack('Sepete eklendi ✅  (${MarketCart.lines.length})');
   }
 
-  // Hediyelik tasarımlar RTDB
   Stream<List<MarketListingModel>> streamGiftDesigns() {
     final ref = FirebaseDatabase.instance.ref('gift_designs');
 
@@ -104,6 +105,7 @@ class _MarketPageState extends State<MarketPage> {
       if (raw is! Map) return <MarketListingModel>[];
 
       final list = <MarketListingModel>[];
+
       raw.forEach((key, value) {
         if (value is Map) {
           list.add(
@@ -122,6 +124,7 @@ class _MarketPageState extends State<MarketPage> {
 
   String getMainOf(MarketListingModel x) {
     if (x.isGift) return 'Hediyelik Eşya';
+
     final m = _s(x.attrs['main']);
     return m.isNotEmpty ? m : _s(x.categoryMain);
   }
@@ -130,6 +133,7 @@ class _MarketPageState extends State<MarketPage> {
     if (x.isGift) {
       final t = _s(x.attrs['giftType']);
       if (t.isNotEmpty) return t;
+
       final sub = _s(x.categorySub);
       return sub.isNotEmpty ? sub : 'Hediyelik';
     }
@@ -145,13 +149,48 @@ class _MarketPageState extends State<MarketPage> {
 
     final sub = _s(a['sub']);
     if (sub.isNotEmpty) return sub;
+
     return _s(x.categorySub);
   }
 
   String getBrandOf(MarketListingModel x) {
     if (x.isGift) return '';
+
     final b = _s(x.attrs['brand']);
     return b.isNotEmpty ? b : _s(x.brand);
+  }
+
+  int _intVal(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is double) return v.round();
+    return int.tryParse(v.toString()) ?? 0;
+  }
+
+  int oldPriceOf(MarketListingModel x) {
+    return _intVal(
+      x.attrs['oldPrice'] ??
+          x.attrs['old_price'] ??
+          x.attrs['eskiFiyat'] ??
+          x.attrs['listPrice'],
+    );
+  }
+
+  String ilanCodeOf(MarketListingModel x) {
+    final code = _s(
+      x.attrs['ilanCode'] ??
+          x.attrs['listingCode'] ??
+          x.attrs['code'],
+    );
+
+    if (code.isNotEmpty) return code;
+
+    final cleanId = x.id.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+    final short = cleanId.length > 6
+        ? cleanId.substring(cleanId.length - 6).toUpperCase()
+        : cleanId.toUpperCase();
+
+    return 'MKT-$short';
   }
 
   List<String> buildSubChips(List<MarketListingModel> all) {
@@ -160,18 +199,22 @@ class _MarketPageState extends State<MarketPage> {
     if (selectedLeft == '1el' || selectedLeft == '2el') {
       final filtered = all.where((x) => x.condition == selectedLeft);
       final freq = <String, int>{};
+
       for (final x in filtered) {
         final s = getSubOf(x);
         if (s.isEmpty) continue;
         freq[s] = (freq[s] ?? 0) + 1;
       }
+
       final top = freq.entries.toList()
         ..sort((a, b) => b.value.compareTo(a.value));
+
       return [hepsi, ...top.take(16).map((e) => e.key)];
     }
 
     final filtered = all.where((x) => getMainOf(x) == selectedLeft);
     final set = <String>{};
+
     for (final x in filtered) {
       final s = getSubOf(x);
       if (s.isNotEmpty) set.add(s);
@@ -189,27 +232,32 @@ class _MarketPageState extends State<MarketPage> {
   bool pass(MarketListingModel x, Set<String> favIds) {
     if (_showFavoritesOnly && !favIds.contains(x.id)) return false;
 
-    // soldaki durum/ana kategori filtresi
     if (selectedLeft == '1el' || selectedLeft == '2el') {
       if (x.condition != selectedLeft) return false;
     } else {
       if (getMainOf(x) != selectedLeft) return false;
     }
 
-    // üst chip filtresi
     if (selectedSubChip != 'Hepsi') {
       if (getSubOf(x) != selectedSubChip) return false;
     }
 
-    // bottom sheet filtresi
-    if ((_filter.main ?? '').isNotEmpty && getMainOf(x) != _filter.main) return false;
-    if ((_filter.sub ?? '').isNotEmpty && getSubOf(x) != _filter.sub) return false;
+    if ((_filter.main ?? '').isNotEmpty && getMainOf(x) != _filter.main) {
+      return false;
+    }
+
+    if ((_filter.sub ?? '').isNotEmpty && getSubOf(x) != _filter.sub) {
+      return false;
+    }
 
     if (!x.isGift && (_filter.brand ?? '').isNotEmpty) {
       if (getBrandOf(x) != _filter.brand) return false;
     }
 
-    if ((_filter.city ?? '').isNotEmpty && _s(x.city) != _filter.city) return false;
+    if ((_filter.city ?? '').isNotEmpty && _s(x.city) != _filter.city) {
+      return false;
+    }
+
     if (_filter.minPrice != null && x.price < _filter.minPrice!) return false;
     if (_filter.maxPrice != null && x.price > _filter.maxPrice!) return false;
 
@@ -238,10 +286,15 @@ class _MarketPageState extends State<MarketPage> {
       stream: _service.streamListings(),
       builder: (context, snapListings) {
         if (snapListings.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
+
         if (snapListings.hasError) {
-          return Scaffold(body: Center(child: Text('Hata: ${snapListings.error}')));
+          return Scaffold(
+            body: Center(child: Text('Hata: ${snapListings.error}')),
+          );
         }
 
         final normalAll = snapListings.data ?? [];
@@ -266,6 +319,21 @@ class _MarketPageState extends State<MarketPage> {
                     title: const Text('Market'),
                     actions: [
                       IconButton(
+                        tooltip: _showFavoritesOnly
+                            ? 'Tüm ilanları göster'
+                            : 'Favorileri göster',
+                        onPressed: () {
+                          setState(() {
+                            _showFavoritesOnly = !_showFavoritesOnly;
+                          });
+                        },
+                        icon: Icon(
+                          _showFavoritesOnly
+                              ? Icons.favorite
+                              : Icons.favorite_border,
+                        ),
+                      ),
+                      IconButton(
                         tooltip: 'Filtrele',
                         onPressed: openFilterSheet,
                         icon: const Icon(Icons.tune),
@@ -275,7 +343,9 @@ class _MarketPageState extends State<MarketPage> {
                         onPressed: () {
                           Navigator.push(
                             context,
-                            MaterialPageRoute(builder: (_) => const MarketCartPage()),
+                            MaterialPageRoute(
+                              builder: (_) => const MarketCartPage(),
+                            ),
                           ).then((_) => setState(() {}));
                         },
                         icon: const Icon(Icons.shopping_cart_outlined),
@@ -286,7 +356,9 @@ class _MarketPageState extends State<MarketPage> {
                           onPressed: () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(builder: (_) => const MarketIlanEklePage()),
+                              MaterialPageRoute(
+                                builder: (_) => const MarketIlanEklePage(),
+                              ),
                             );
                           },
                           icon: const Icon(Icons.add),
@@ -305,20 +377,32 @@ class _MarketPageState extends State<MarketPage> {
                           itemBuilder: (context, i) {
                             final t = subs[i];
                             final isSel = t == selectedSubChip;
+
                             return InkWell(
                               borderRadius: BorderRadius.circular(999),
-                              onTap: () => setState(() => selectedSubChip = t),
+                              onTap: () {
+                                setState(() => selectedSubChip = t);
+                              },
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(999),
                                   color: isSel ? Colors.black : Colors.transparent,
-                                  border: Border.all(color: Colors.black.withOpacity(0.12)),
+                                  border: Border.all(
+                                    color: Colors.black.withOpacity(0.12),
+                                  ),
                                 ),
                                 child: Row(
                                   children: [
                                     if (isSel) ...[
-                                      const Icon(Icons.check, size: 16, color: Colors.white),
+                                      const Icon(
+                                        Icons.check,
+                                        size: 16,
+                                        color: Colors.white,
+                                      ),
                                       const SizedBox(width: 6),
                                     ],
                                     Text(
@@ -340,24 +424,35 @@ class _MarketPageState extends State<MarketPage> {
                             ? const Center(child: Text('İlan bulunamadı.'))
                             : GridView.builder(
                           padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
                             crossAxisCount: 2,
                             mainAxisSpacing: 12,
                             crossAxisSpacing: 12,
-                            childAspectRatio: 0.62, // ✅ overflow fix
+                            childAspectRatio: 0.58,
                           ),
                           itemCount: items.length,
                           itemBuilder: (context, i) {
                             final x = items[i];
-                            final cover = x.photoUrls.isNotEmpty ? x.photoUrls.first : null;
+                            final cover = x.photoUrls.isNotEmpty
+                                ? x.photoUrls.first
+                                : null;
                             final isFav = favIds.contains(x.id);
-                            final badgeText = x.isGift ? 'Kişiye Özel' : getSubOf(x);
+                            final badgeText =
+                            x.isGift ? 'Kişiye Özel' : getSubOf(x);
+                            final oldPrice = oldPriceOf(x);
+                            final hasDiscount =
+                                oldPrice > x.price && oldPrice > 0;
+                            final code = ilanCodeOf(x);
 
                             return InkWell(
                               onTap: () {
                                 Navigator.push(
                                   context,
-                                  MaterialPageRoute(builder: (_) => MarketDetayPage(item: x)),
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        MarketDetayPage(item: x),
+                                  ),
                                 ).then((_) => setState(() {}));
                               },
                               borderRadius: BorderRadius.circular(18),
@@ -372,76 +467,137 @@ class _MarketPageState extends State<MarketPage> {
                                       color: Colors.black.withOpacity(.07),
                                     ),
                                   ],
-                                  border: Border.all(color: Colors.black.withOpacity(0.06)),
+                                  border: Border.all(
+                                    color: Colors.black.withOpacity(0.06),
+                                  ),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    // ✅ image area now expands (no overflow)
                                     Expanded(
                                       child: ClipRRect(
-                                        borderRadius: const BorderRadius.vertical(
+                                        borderRadius:
+                                        const BorderRadius.vertical(
                                           top: Radius.circular(18),
                                         ),
                                         child: Stack(
                                           children: [
                                             Positioned.fill(
-                                              child: (cover == null || cover.isEmpty)
+                                              child: (cover == null ||
+                                                  cover.isEmpty)
                                                   ? Container(
-                                                color: Colors.black.withOpacity(0.04),
+                                                color: Colors.black
+                                                    .withOpacity(0.04),
                                                 child: const Center(
-                                                  child: Icon(Icons.image_outlined),
+                                                  child: Icon(
+                                                    Icons
+                                                        .image_outlined,
+                                                  ),
                                                 ),
                                               )
                                                   : Image.network(
                                                 cover,
                                                 fit: BoxFit.cover,
-                                                errorBuilder: (_, __, ___) => Container(
-                                                  color: Colors.black.withOpacity(0.04),
-                                                  child: const Center(
-                                                    child: Icon(Icons.broken_image),
-                                                  ),
-                                                ),
+                                                errorBuilder:
+                                                    (_, __, ___) =>
+                                                    Container(
+                                                      color: Colors.black
+                                                          .withOpacity(0.04),
+                                                      child: const Center(
+                                                        child: Icon(
+                                                          Icons
+                                                              .broken_image,
+                                                        ),
+                                                      ),
+                                                    ),
                                               ),
                                             ),
                                             Positioned(
                                               left: 10,
                                               top: 10,
                                               child: Container(
-                                                padding: const EdgeInsets.symmetric(
+                                                padding:
+                                                const EdgeInsets.symmetric(
                                                   horizontal: 10,
                                                   vertical: 6,
                                                 ),
                                                 decoration: BoxDecoration(
-                                                  borderRadius: BorderRadius.circular(999),
-                                                  color: Colors.white.withOpacity(0.92),
+                                                  borderRadius:
+                                                  BorderRadius.circular(
+                                                      999),
+                                                  color: Colors.white
+                                                      .withOpacity(0.92),
                                                   border: Border.all(
-                                                    color: Colors.black.withOpacity(0.08),
+                                                    color: Colors.black
+                                                        .withOpacity(0.08),
                                                   ),
                                                 ),
                                                 child: Text(
                                                   badgeText,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                  TextOverflow.ellipsis,
                                                   style: const TextStyle(
-                                                    fontWeight: FontWeight.w900,
+                                                    fontWeight:
+                                                    FontWeight.w900,
                                                     fontSize: 12,
                                                   ),
                                                 ),
                                               ),
                                             ),
+                                            if (hasDiscount)
+                                              Positioned(
+                                                left: 10,
+                                                bottom: 10,
+                                                child: Container(
+                                                  padding:
+                                                  const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 10,
+                                                    vertical: 6,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    borderRadius:
+                                                    BorderRadius
+                                                        .circular(999),
+                                                    color: Colors.green
+                                                        .withOpacity(0.92),
+                                                  ),
+                                                  child: const Text(
+                                                    'İNDİRİM',
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                      FontWeight.w900,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ),
                                             Positioned(
                                               right: 10,
                                               top: 10,
                                               child: InkWell(
-                                                onTap: () => toggleFavorite(x),
-                                                borderRadius: BorderRadius.circular(999),
+                                                onTap: () =>
+                                                    toggleFavorite(x),
+                                                borderRadius:
+                                                BorderRadius.circular(
+                                                    999),
                                                 child: Container(
-                                                  padding: const EdgeInsets.all(8),
+                                                  padding:
+                                                  const EdgeInsets.all(8),
                                                   decoration: BoxDecoration(
-                                                    borderRadius: BorderRadius.circular(999),
-                                                    color: Colors.black.withOpacity(0.35),
+                                                    borderRadius:
+                                                    BorderRadius
+                                                        .circular(999),
+                                                    color: Colors.black
+                                                        .withOpacity(0.35),
                                                   ),
                                                   child: Icon(
-                                                    isFav ? Icons.favorite : Icons.favorite_border,
+                                                    isFav
+                                                        ? Icons.favorite
+                                                        : Icons
+                                                        .favorite_border,
                                                     color: Colors.white,
                                                     size: 18,
                                                   ),
@@ -452,12 +608,12 @@ class _MarketPageState extends State<MarketPage> {
                                         ),
                                       ),
                                     ),
-
-                                    // ✅ bottom area fixed height-ish (no overflow)
                                     Padding(
-                                      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                                      padding: const EdgeInsets.fromLTRB(
+                                          10, 8, 10, 10),
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
                                           Text(
@@ -469,12 +625,47 @@ class _MarketPageState extends State<MarketPage> {
                                               fontSize: 14.5,
                                             ),
                                           ),
-                                          const SizedBox(height: 6),
+                                          const SizedBox(height: 5),
+                                          if (hasDiscount)
+                                            Text(
+                                              tl(oldPrice),
+                                              maxLines: 1,
+                                              overflow:
+                                              TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                fontWeight:
+                                                FontWeight.w800,
+                                                fontSize: 12,
+                                                color: Colors.grey,
+                                                decoration: TextDecoration
+                                                    .lineThrough,
+                                                decorationThickness: 2,
+                                              ),
+                                            ),
                                           Text(
                                             tl(x.price),
-                                            style: const TextStyle(
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
                                               fontWeight: FontWeight.w900,
-                                              fontSize: 15,
+                                              fontSize:
+                                              hasDiscount ? 17 : 15,
+                                              color: hasDiscount
+                                                  ? Colors.green
+                                                  : Colors.black,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 3),
+                                          Text(
+                                            'Kod: $code',
+                                            maxLines: 1,
+                                            overflow:
+                                            TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 11,
+                                              color: Colors.black
+                                                  .withOpacity(0.55),
                                             ),
                                           ),
                                           const SizedBox(height: 8),
@@ -482,11 +673,18 @@ class _MarketPageState extends State<MarketPage> {
                                             height: 36,
                                             width: double.infinity,
                                             child: ElevatedButton.icon(
-                                              onPressed: () => addToCart(x, qty: 1),
-                                              icon: const Icon(Icons.add_shopping_cart, size: 18),
+                                              onPressed: () =>
+                                                  addToCart(x, qty: 1),
+                                              icon: const Icon(
+                                                Icons.add_shopping_cart,
+                                                size: 18,
+                                              ),
                                               label: const Text(
                                                 'Sepete Ekle',
-                                                style: TextStyle(fontWeight: FontWeight.w900),
+                                                style: TextStyle(
+                                                  fontWeight:
+                                                  FontWeight.w900,
+                                                ),
                                               ),
                                             ),
                                           ),

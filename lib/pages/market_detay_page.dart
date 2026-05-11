@@ -1,9 +1,12 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:ihtiyacim/models/market_listing_model.dart';
 import 'package:ihtiyacim/features/market/services/market_cart.dart';
+
+const String ADMIN_EMAIL = 'mehmetilik19@gmail.com';
 
 class MarketDetayPage extends StatefulWidget {
   final MarketListingModel item;
@@ -23,12 +26,100 @@ class _MarketDetayPageState extends State<MarketDetayPage> {
 
   int _toInt(dynamic v, {int fallback = 0}) {
     if (v is int) return v;
+    if (v is double) return v.round();
     return int.tryParse(_s(v)) ?? fallback;
+  }
+
+  String tl(int v) => '$v TL';
+
+  bool get _canDelete {
+    final user = FirebaseAuth.instance.currentUser;
+    final email = (user?.email ?? '').toLowerCase().trim();
+    final uid = user?.uid ?? '';
+    final ownerUid = _s(widget.item.attrs['ownerUid']);
+
+    return email == ADMIN_EMAIL.toLowerCase() || (uid.isNotEmpty && uid == ownerUid);
+  }
+
+  int oldPriceOf(MarketListingModel x) {
+    return _toInt(
+      x.oldPrice != 0
+          ? x.oldPrice
+          : x.attrs['oldPrice'] ??
+          x.attrs['old_price'] ??
+          x.attrs['eskiFiyat'] ??
+          x.attrs['listPrice'],
+    );
+  }
+
+  String ilanCodeOf(MarketListingModel x) {
+    final code = _s(
+      x.ilanCode.isNotEmpty
+          ? x.ilanCode
+          : x.attrs['ilanCode'] ??
+          x.attrs['listingCode'] ??
+          x.attrs['code'],
+    );
+
+    if (code.isNotEmpty) return code;
+
+    final cleanId = x.id.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+    final short = cleanId.length > 6
+        ? cleanId.substring(cleanId.length - 6).toUpperCase()
+        : cleanId.toUpperCase();
+
+    return 'MKT-$short';
   }
 
   void _snack(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  Future<void> _copyCode(String code) async {
+    await Clipboard.setData(ClipboardData(text: code));
+    _snack('İlan kodu kopyalandı: $code');
+  }
+
+  Future<void> _deleteListing() async {
+    if (!_canDelete) {
+      _snack('Bu ilanı silme yetkin yok.');
+      return;
+    }
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('İlan silinsin mi?'),
+        content: const Text('Bu işlem geri alınamaz.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Vazgeç'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Sil'),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    final id = widget.item.id;
+
+    await Future.wait([
+      FirebaseDatabase.instance.ref('market_listings/$id').remove(),
+      FirebaseDatabase.instance.ref('market/listings/$id').remove(),
+      FirebaseDatabase.instance.ref('listings/market/$id').remove(),
+      FirebaseDatabase.instance.ref('gift_designs/$id').remove(),
+      FirebaseDatabase.instance.ref('market_comments/$id').remove(),
+    ]);
+
+    if (!mounted) return;
+    _snack('İlan silindi');
+    Navigator.pop(context);
   }
 
   void _addToCart() {
@@ -141,12 +232,25 @@ class _MarketDetayPageState extends State<MarketDetayPage> {
     final cover =
     photos.isNotEmpty ? photos[selectedIndex.clamp(0, photos.length - 1)] : null;
 
+    final oldPrice = oldPriceOf(x);
+    final hasDiscount = oldPrice > x.price && oldPrice > 0;
+    final ilanCode = ilanCodeOf(x);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Ürün Detayı')),
+      appBar: AppBar(
+        title: const Text('Ürün Detayı'),
+        actions: [
+          if (_canDelete)
+            IconButton(
+              tooltip: 'İlanı Sil',
+              icon: const Icon(Icons.delete_outline),
+              onPressed: _deleteListing,
+            ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
         children: [
-          // ✅ Büyük foto (tıkla → tam ekran galeri)
           ClipRRect(
             borderRadius: BorderRadius.circular(18),
             child: Stack(
@@ -170,6 +274,26 @@ class _MarketDetayPageState extends State<MarketDetayPage> {
                     ),
                   ),
                 ),
+                if (hasDiscount)
+                  Positioned(
+                    left: 12,
+                    top: 12,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: Colors.green,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const Text(
+                        'İNDİRİM',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ),
                 if (photos.isNotEmpty)
                   Positioned(
                     right: 10,
@@ -192,9 +316,9 @@ class _MarketDetayPageState extends State<MarketDetayPage> {
               ],
             ),
           ),
+
           const SizedBox(height: 10),
 
-          // ✅ Thumbnail
           if (photos.length > 1)
             SizedBox(
               height: 74,
@@ -237,22 +361,101 @@ class _MarketDetayPageState extends State<MarketDetayPage> {
 
           const SizedBox(height: 14),
 
-          // ✅ Başlık + fiyat
           Text(
             x.title,
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20),
           ),
+
           const SizedBox(height: 8),
-          Text(
-            '${x.price} TL',
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18),
+
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.07),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.green.withOpacity(0.18)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (hasDiscount) ...[
+                  Text(
+                    tl(oldPrice),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                      color: Colors.grey,
+                      decoration: TextDecoration.lineThrough,
+                      decorationThickness: 2,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                ],
+                Text(
+                  tl(x.price),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: hasDiscount ? 26 : 22,
+                    color: hasDiscount ? Colors.green : Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                InkWell(
+                  borderRadius: BorderRadius.circular(999),
+                  onTap: () => _copyCode(ilanCode),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'İlan Kodu: $ilanCode',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 12,
+                            color: Colors.black.withOpacity(0.70),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.copy_rounded,
+                          size: 15,
+                          color: Colors.black.withOpacity(0.55),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
 
           const SizedBox(height: 14),
 
-          // ✅ Sepete ekle
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.black.withOpacity(0.06)),
+            ),
+            child: Column(
+              children: [
+                _InfoRow(title: 'Durum', value: x.condition == '1el' ? '1. El' : '2. El'),
+                _InfoRow(title: 'Şehir', value: x.city),
+                _InfoRow(title: 'Kategori', value: x.categoryPath),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
           SizedBox(
-            height: 48,
+            height: 50,
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: _addToCart,
@@ -266,7 +469,6 @@ class _MarketDetayPageState extends State<MarketDetayPage> {
 
           const SizedBox(height: 18),
 
-          // ✅ Yorumlar + Ortalama + Ekle
           StreamBuilder<DatabaseEvent>(
             stream: _commentsRef.onValue,
             builder: (context, snap) {
@@ -336,6 +538,46 @@ class _MarketDetayPageState extends State<MarketDetayPage> {
                 ],
               );
             },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  final String title;
+  final String value;
+
+  const _InfoRow({
+    required this.title,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (value.trim().isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 82,
+            child: Text(
+              title,
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: Colors.black.withOpacity(0.55),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(fontWeight: FontWeight.w800),
+            ),
           ),
         ],
       ),
