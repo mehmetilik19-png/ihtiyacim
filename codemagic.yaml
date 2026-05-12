@@ -21,9 +21,7 @@ workflows:
 
       - name: Remove bad G flag
         script: |
-          grep -R --line-number -- "-G" ios || true
-          find ios -type f \( -name "*.xcconfig" -o -name "*.pbxproj" -o -name "*.sh" \) -exec sed -i '' 's/-G//g' {} \;
-          grep -R --line-number -- "-G" ios || true
+          find ios -type f \( -name "*.xcconfig" -o -name "*.pbxproj" \) -exec sed -i '' 's/-G//g' {} \;
 
       - name: Build iOS
         script: flutter build ios --release --no-codesign
