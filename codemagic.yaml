@@ -23,8 +23,8 @@ workflows:
       - name: Reinstall pods
         script: |
           cd ios
-          pod deintegrate
-          pod install --repo-update
+          pod repo update
+          pod install
           cd ..
 
       - name: Remove bad G flag
@@ -33,6 +33,9 @@ workflows:
 
       - name: Build iOS
         script: |
+          export OTHER_CFLAGS=""
+          export OTHER_CPLUSPLUSFLAGS=""
+          export OTHER_SWIFT_FLAGS=""
           flutter build ios --release --no-codesign --verbose
 
     artifacts:
