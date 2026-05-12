@@ -10,10 +10,23 @@ workflows:
       cocoapods: default
 
     scripts:
-      - flutter clean
-      - flutter pub get
-      - cd ios && pod install && cd ..
-      - flutter build ios --release --no-codesign
+      - name: Clean project
+        script: flutter clean
+
+      - name: Get dependencies
+        script: flutter pub get
+
+      - name: Install pods
+        script: cd ios && pod install && cd ..
+
+      - name: Remove bad G flag
+        script: |
+          grep -R --line-number -- "-G" ios || true
+          find ios -type f \( -name "*.xcconfig" -o -name "*.pbxproj" -o -name "*.sh" \) -exec sed -i '' 's/-G//g' {} \;
+          grep -R --line-number -- "-G" ios || true
+
+      - name: Build iOS
+        script: flutter build ios --release --no-codesign
 
     artifacts:
       - build/ios/iphoneos/*.app
