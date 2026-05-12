@@ -23,8 +23,9 @@ workflows:
       - name: Reinstall pods
         script: |
           cd ios
-          pod repo update
-          pod install
+          rm -rf Pods
+          rm -rf Podfile.lock
+          pod install --repo-update
           cd ..
 
       - name: Remove bad G flag
