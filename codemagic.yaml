@@ -29,7 +29,7 @@ workflows:
 
       - name: Remove bad compiler flag
         script: |
-          find ios/Pods -type f \( -name "*.xcconfig" -o -name "*.pbxproj" \) -exec sed -i '' 's/-GCC_WARN_INHIBIT_ALL_WARNINGS//g' {} \;
+          find ios/Pods -type f \( -name "*.xcconfig" -o -name "*.pbxproj" \) -exec sed -i '' 's/ -G / /g; s/^-G //g; s/ -G$//g; s/-GCC_WARN_INHIBIT_ALL_WARNINGS//g' {} \;
 
       - name: Build iOS
         script: flutter build ios --release --no-codesign
