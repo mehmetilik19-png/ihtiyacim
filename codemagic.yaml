@@ -1,13 +1,15 @@
 workflows:
   ios-release:
     name: iOS Release
+
     environment:
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: com.ihtiyacim.ihtiyacim
+        bundle_identifier: com.esma.ihtiyacim
 
     scripts:
       - flutter pub get
+      - grep -rl "com.ihtiyacim.ihtiyacim" ios | xargs sed -i '' 's/com.ihtiyacim.ihtiyacim/com.esma.ihtiyacim/g' || true
       - cd ios && pod install
       - flutter build ipa --release
 
