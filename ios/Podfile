@@ -28,7 +28,6 @@ flutter_ios_podfile_setup
 
 target 'Runner' do
   use_modular_headers!
-
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
 end
 
@@ -39,6 +38,14 @@ post_install do |installer|
     target.build_configurations.each do |config|
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
       config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'gnu++17'
+    end
+
+    target.source_build_phase.files.each do |file|
+      next unless file.settings && file.settings['COMPILER_FLAGS']
+
+      flags = file.settings['COMPILER_FLAGS'].split
+      flags.reject! { |flag| flag.start_with?('-G') }
+      file.settings['COMPILER_FLAGS'] = flags.join(' ')
     end
   end
 end
