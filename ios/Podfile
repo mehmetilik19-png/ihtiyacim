@@ -40,6 +40,8 @@ post_install do |installer|
       config.build_settings['CLANG_CXX_LANGUAGE_STANDARD'] = 'gnu++17'
     end
 
+    next unless target.respond_to?(:source_build_phase)
+
     target.source_build_phase.files.each do |file|
       next unless file.settings && file.settings['COMPILER_FLAGS']
 
