@@ -13,7 +13,7 @@ workflows:
       cocoapods: default
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: com.ihtiyacim.ihtiyacim
+      bundle_identifier: com.esma.ihtiyacim
 
     scripts:
       - name: Clean project
