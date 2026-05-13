@@ -4,10 +4,16 @@ workflows:
     max_build_duration: 60
     instance_type: mac_mini_m2
 
+    integrations:
+      app_store_connect: Codemagic
+
     environment:
       flutter: stable
       xcode: 16.2
       cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.ihtiyacim.ihtiyacim
 
     scripts:
       - name: Clean project
@@ -26,6 +32,9 @@ workflows:
           pod deintegrate
           pod install --repo-update
           cd ..
+
+      - name: Set up code signing
+        script: xcode-project use-profiles
 
       - name: Build IPA
         script: flutter build ipa --release --export-method app-store
