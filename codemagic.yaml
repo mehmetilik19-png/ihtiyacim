@@ -17,6 +17,14 @@ workflows:
         bundle_identifier: com.esma.ihtiyacim
 
     scripts:
+      - name: Set bundle id
+        script: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.esma.ihtiyacim" ios/Runner/Info.plist || true
+          grep -rl "com.ihtiyacim.ihtiyacim" ios | xargs sed -i '' 's/com.ihtiyacim.ihtiyacim/com.esma.ihtiyacim/g' || true
+
+      - name: Set up code signing identities
+        script: keychain initialize
+
       - name: Clean project
         script: |
           flutter clean
@@ -38,8 +46,7 @@ workflows:
         script: xcode-project use-profiles
 
       - name: Build IPA
-        script: |
-          flutter build ipa --release --export-method app-store --build-name=1.0.0 --build-number=8 --dart-define=PRODUCT_BUNDLE_IDENTIFIER=com.esma.ihtiyacim
+        script: flutter build ipa --release --export-method app-store
 
     artifacts:
       - build/ios/ipa/*.ipa
