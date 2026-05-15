@@ -16,6 +16,10 @@ workflows:
         bundle_identifier: com.esma.ihtiyacim
 
     scripts:
+      - name: Set app version
+        script: |
+          sed -i '' 's/^version:.*/version: 1.0.0+9/' pubspec.yaml
+
       - name: Set bundle id
         script: |
           grep -rl "com.ihtiyacim.ihtiyacim" ios | xargs sed -i '' 's/com.ihtiyacim.ihtiyacim/com.esma.ihtiyacim/g' || true
@@ -51,7 +55,7 @@ workflows:
           EOF
 
       - name: Build IPA
-        script: flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
+        script: flutter build ipa --release --build-number=9 --build-name=1.0.0 --export-options-plist=ios/ExportOptions.plist
 
     artifacts:
       - build/ios/ipa/*.ipa
@@ -71,11 +75,15 @@ workflows:
       flutter: stable
 
     scripts:
+      - name: Set app version
+        script: |
+          sed -i 's/^version:.*/version: 1.0.9+9/' pubspec.yaml
+
       - name: Get dependencies
         script: flutter pub get
 
       - name: Build Android App Bundle
-        script: flutter build appbundle --release --build-number=8 --build-name=1.0.8
+        script: flutter build appbundle --release --build-number=9 --build-name=1.0.9
 
     artifacts:
       - build/app/outputs/bundle/release/app-release.aab
