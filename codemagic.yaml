@@ -18,7 +18,7 @@ workflows:
     scripts:
       - name: Set app version
         script: |
-          sed -i '' 's/^version:.*/version: 1.0.0+9/' pubspec.yaml
+          sed -i '' 's/^version:.*/version: 1.0.0+10/' pubspec.yaml
 
       - name: Set bundle id
         script: |
