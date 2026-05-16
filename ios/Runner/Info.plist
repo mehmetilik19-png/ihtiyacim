@@ -24,6 +24,20 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+
+	<key>NSCameraUsageDescription</key>
+	<string>Uygulama kamera erişimine ihtiyaç duyabilir.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Uygulama fotoğraf seçmek için galeri erişimine ihtiyaç duyabilir.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Uygulama fotoğraf kaydetmek için galeri erişimine ihtiyaç duyabilir.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Uygulama konumunuzu kullanarak size yakın içerikleri gösterebilir.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Uygulama konumunuzu kullanarak size yakın içerikleri gösterebilir.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Uygulama mikrofon erişimine ihtiyaç duyabilir.</string>
+
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
