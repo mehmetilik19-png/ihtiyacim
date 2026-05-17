@@ -52,7 +52,7 @@
 	<string>Uygulama konumunuzu kullanarak size yakın içerikleri gösterebilir.</string>
 
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Uygulama mikrofon erişimine ihtiyaç duyebilir.</string>
+	<string>Uygulama mikrofon erişimine ihtiyaç duyabilir.</string>
 
 	<key>NSMotionUsageDescription</key>
 	<string>Uygulama bazı özellikler için hareket verilerine ihtiyaç duyabilir.</string>
@@ -75,14 +75,6 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-
-	<key>UISupportedInterfaceOrientations~ipad</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
