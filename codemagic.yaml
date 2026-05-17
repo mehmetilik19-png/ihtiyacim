@@ -18,11 +18,16 @@ workflows:
     scripts:
       - name: Set app version
         script: |
-          sed -i '' 's/^version:.*/version: 1.0.10+10/' pubspec.yaml
+          sed -i '' 's/^version:.*/version: 1.0.11+11/' pubspec.yaml
 
       - name: Set bundle id
         script: |
           grep -rl "com.ihtiyacim.ihtiyacim" ios | xargs sed -i '' 's/com.ihtiyacim.ihtiyacim/com.esma.ihtiyacim/g' || true
+
+      - name: Disable iPad support
+        script: |
+          sed -i '' 's/TARGETED_DEVICE_FAMILY = "1,2";/TARGETED_DEVICE_FAMILY = 1;/g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/TARGETED_DEVICE_FAMILY = 2;/TARGETED_DEVICE_FAMILY = 1;/g' ios/Runner.xcodeproj/project.pbxproj
 
       - name: Get dependencies
         script: flutter pub get
@@ -55,7 +60,7 @@ workflows:
           EOF
 
       - name: Build IPA
-        script: flutter build ipa --release --build-number=10 --build-name=1.0.10 --export-options-plist=ios/ExportOptions.plist
+        script: flutter build ipa --release --build-number=11 --build-name=1.0.11 --export-options-plist=ios/ExportOptions.plist
 
     artifacts:
       - build/ios/ipa/*.ipa
@@ -77,13 +82,13 @@ workflows:
     scripts:
       - name: Set app version
         script: |
-          sed -i 's/^version:.*/version: 1.0.10+10/' pubspec.yaml
+          sed -i 's/^version:.*/version: 1.0.11+11/' pubspec.yaml
 
       - name: Get dependencies
         script: flutter pub get
 
       - name: Build Android App Bundle
-        script: flutter build appbundle --release --build-number=10 --build-name=1.0.10
+        script: flutter build appbundle --release --build-number=11 --build-name=1.0.11
 
     artifacts:
       - build/app/outputs/bundle/release/app-release.aab
