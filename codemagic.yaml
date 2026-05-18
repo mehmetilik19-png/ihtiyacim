@@ -18,11 +18,12 @@ workflows:
     scripts:
       - name: Set app version
         script: |
-          sed -i '' 's/^version:.*/version: 1.0.11+11/' pubspec.yaml
+          sed -i '' 's/^version:.*/version: 1.0.12+12/' pubspec.yaml
 
       - name: Set bundle id
         script: |
           grep -rl "com.ihtiyacim.ihtiyacim" ios | xargs sed -i '' 's/com.ihtiyacim.ihtiyacim/com.esma.ihtiyacim/g' || true
+          grep -rl "com.adin.ihtiyacim" ios | xargs sed -i '' 's/com.adin.ihtiyacim/com.esma.ihtiyacim/g' || true
 
       - name: Disable iPad support
         script: |
@@ -60,7 +61,7 @@ workflows:
           EOF
 
       - name: Build IPA
-        script: flutter build ipa --release --build-number=11 --build-name=1.0.11 --export-options-plist=ios/ExportOptions.plist
+        script: flutter build ipa --release --build-number=12 --build-name=1.0.12 --export-options-plist=ios/ExportOptions.plist
 
     artifacts:
       - build/ios/ipa/*.ipa
@@ -82,13 +83,13 @@ workflows:
     scripts:
       - name: Set app version
         script: |
-          sed -i 's/^version:.*/version: 1.0.11+11/' pubspec.yaml
+          sed -i 's/^version:.*/version: 1.0.12+12/' pubspec.yaml
 
       - name: Get dependencies
         script: flutter pub get
 
       - name: Build Android App Bundle
-        script: flutter build appbundle --release --build-number=11 --build-name=1.0.11
+        script: flutter build appbundle --release --build-number=12 --build-name=1.0.12
 
     artifacts:
       - build/app/outputs/bundle/release/app-release.aab
