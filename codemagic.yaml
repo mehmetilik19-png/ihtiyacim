@@ -18,12 +18,23 @@ workflows:
     scripts:
       - name: Set app version
         script: |
-          sed -i '' 's/^version:.*/version: 1.0.12+12/' pubspec.yaml
+          sed -i '' 's/^version:.*/version: 1.0.13+13/' pubspec.yaml
 
       - name: Set bundle id
         script: |
           grep -rl "com.ihtiyacim.ihtiyacim" ios | xargs sed -i '' 's/com.ihtiyacim.ihtiyacim/com.esma.ihtiyacim/g' || true
           grep -rl "com.adin.ihtiyacim" ios | xargs sed -i '' 's/com.adin.ihtiyacim/com.esma.ihtiyacim/g' || true
+
+      - name: Check Firebase plist
+        script: |
+          if [ ! -f "ios/Runner/GoogleService-Info.plist" ]; then
+            echo "ERROR: ios/Runner/GoogleService-Info.plist missing"
+            exit 1
+          fi
+
+          echo "Firebase plist found"
+          /usr/libexec/PlistBuddy -c "Print :BUNDLE_ID" ios/Runner/GoogleService-Info.plist || true
+          /usr/libexec/PlistBuddy -c "Print :GOOGLE_APP_ID" ios/Runner/GoogleService-Info.plist || true
 
       - name: Disable iPad support
         script: |
@@ -61,7 +72,7 @@ workflows:
           EOF
 
       - name: Build IPA
-        script: flutter build ipa --release --build-number=12 --build-name=1.0.12 --export-options-plist=ios/ExportOptions.plist
+        script: flutter build ipa --release --build-number=13 --build-name=1.0.13 --export-options-plist=ios/ExportOptions.plist
 
     artifacts:
       - build/ios/ipa/*.ipa
@@ -83,13 +94,13 @@ workflows:
     scripts:
       - name: Set app version
         script: |
-          sed -i 's/^version:.*/version: 1.0.12+12/' pubspec.yaml
+          sed -i 's/^version:.*/version: 1.0.13+13/' pubspec.yaml
 
       - name: Get dependencies
         script: flutter pub get
 
       - name: Build Android App Bundle
-        script: flutter build appbundle --release --build-number=12 --build-name=1.0.12
+        script: flutter build appbundle --release --build-number=13 --build-name=1.0.13
 
     artifacts:
       - build/app/outputs/bundle/release/app-release.aab
