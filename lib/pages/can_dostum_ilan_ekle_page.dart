@@ -1,12 +1,13 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // ✅ EKLENDİ
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../models/can_dostum_model.dart';
 import '../services/ai_image_service.dart';
+import '../features/auth/login_page.dart';
 
 class CanDostumIlanEklePage extends StatefulWidget {
   const CanDostumIlanEklePage({super.key});
@@ -58,7 +59,24 @@ class _CanDostumIlanEklePageState extends State<CanDostumIlanEklePage> {
     });
   }
 
+  Future<void> _goLogin() async {
+    if (!mounted) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+    );
+  }
+
   Future<void> _saveIlan() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    if (uid == null || uid.isEmpty) {
+      _snack('İlan eklemek için giriş yapmalısın.');
+      await _goLogin();
+      return;
+    }
+
     final title = _titleC.text.trim();
     final desc = _descC.text.trim();
 
@@ -76,12 +94,6 @@ class _CanDostumIlanEklePageState extends State<CanDostumIlanEklePage> {
     }
     if (_pickedFiles.isEmpty) {
       _snack('En az 1 foto seç.');
-      return;
-    }
-
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null || uid.isEmpty) {
-      _snack('Giriş yapmadan ilan ekleyemezsin.');
       return;
     }
 
@@ -103,7 +115,6 @@ class _CanDostumIlanEklePageState extends State<CanDostumIlanEklePage> {
         photoUrls: photoUrls,
       );
 
-      // ✅ ownerId mutlaka yazılsın (modelde alan olmasa bile RTDB’ye yazıyoruz)
       final data = ilan.toMap();
       data['ownerId'] = uid;
 
@@ -132,7 +143,9 @@ class _CanDostumIlanEklePageState extends State<CanDostumIlanEklePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Can Dostum İlan Ekle')),
+      appBar: AppBar(
+        title: const Text('Can Dostum İlan Ekle'),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -142,34 +155,34 @@ class _CanDostumIlanEklePageState extends State<CanDostumIlanEklePage> {
               decoration: const InputDecoration(labelText: 'Başlık'),
             ),
             const SizedBox(height: 10),
-
             DropdownButtonFormField<String>(
               value: selectedPetType,
               decoration: const InputDecoration(labelText: 'Hayvan Türü'),
               items: petTypes
                   .map((t) => DropdownMenuItem(value: t, child: Text(t)))
                   .toList(),
-              onChanged: _saving ? null : (v) => setState(() => selectedPetType = v),
+              onChanged: _saving
+                  ? null
+                  : (v) => setState(() => selectedPetType = v),
             ),
             const SizedBox(height: 10),
-
             DropdownButtonFormField<String>(
               value: selectedSehir,
               decoration: const InputDecoration(labelText: 'Şehir'),
               items: sehirler
                   .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                   .toList(),
-              onChanged: _saving ? null : (v) => setState(() => selectedSehir = v),
+              onChanged: _saving
+                  ? null
+                  : (v) => setState(() => selectedSehir = v),
             ),
             const SizedBox(height: 10),
-
             TextField(
               controller: _descC,
               maxLines: 3,
               decoration: const InputDecoration(labelText: 'Açıklama'),
             ),
             const SizedBox(height: 12),
-
             Row(
               children: [
                 ElevatedButton.icon(
@@ -182,17 +195,16 @@ class _CanDostumIlanEklePageState extends State<CanDostumIlanEklePage> {
               ],
             ),
             const SizedBox(height: 12),
-
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _saving ? null : _saveIlan,
                 child: _saving
                     ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Text('Kaydet'),
               ),
             ),
