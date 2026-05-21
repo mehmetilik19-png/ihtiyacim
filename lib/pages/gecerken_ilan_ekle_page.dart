@@ -1,10 +1,13 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/gecerken_model.dart';
 import '../services/ai_image_service.dart';
+import '../features/auth/login_page.dart';
 
 class GecerkenIlanEklePage extends StatefulWidget {
   const GecerkenIlanEklePage({super.key});
@@ -27,14 +30,87 @@ class _GecerkenIlanEklePageState extends State<GecerkenIlanEklePage> {
   static const List<String> roles = ['Sürücü', 'Yolcu'];
 
   static const List<String> sehirler = [
-    'Adana','Adıyaman','Afyonkarahisar','Ağrı','Amasya','Ankara','Antalya','Artvin','Aydın','Balıkesir',
-    'Bilecik','Bingöl','Bitlis','Bolu','Burdur','Bursa','Çanakkale','Çankırı','Çorum','Denizli',
-    'Diyarbakır','Edirne','Elazığ','Erzincan','Erzurum','Eskişehir','Gaziantep','Giresun','Gümüşhane','Hakkari',
-    'Hatay','Isparta','Mersin','İstanbul','İzmir','Kars','Kastamonu','Kayseri','Kırklareli','Kırşehir',
-    'Kocaeli','Konya','Kütahya','Malatya','Manisa','Kahramanmaraş','Mardin','Muğla','Muş','Nevşehir',
-    'Niğde','Ordu','Rize','Sakarya','Samsun','Siirt','Sinop','Sivas','Tekirdağ','Tokat',
-    'Trabzon','Tunceli','Şanlıurfa','Uşak','Van','Yozgat','Zonguldak','Aksaray','Bayburt','Karaman',
-    'Kırıkkale','Batman','Şırnak','Bartın','Ardahan','Iğdır','Yalova','Karabük','Kilis','Osmaniye','Düzce',
+    'Adana',
+    'Adıyaman',
+    'Afyonkarahisar',
+    'Ağrı',
+    'Amasya',
+    'Ankara',
+    'Antalya',
+    'Artvin',
+    'Aydın',
+    'Balıkesir',
+    'Bilecik',
+    'Bingöl',
+    'Bitlis',
+    'Bolu',
+    'Burdur',
+    'Bursa',
+    'Çanakkale',
+    'Çankırı',
+    'Çorum',
+    'Denizli',
+    'Diyarbakır',
+    'Edirne',
+    'Elazığ',
+    'Erzincan',
+    'Erzurum',
+    'Eskişehir',
+    'Gaziantep',
+    'Giresun',
+    'Gümüşhane',
+    'Hakkari',
+    'Hatay',
+    'Isparta',
+    'Mersin',
+    'İstanbul',
+    'İzmir',
+    'Kars',
+    'Kastamonu',
+    'Kayseri',
+    'Kırklareli',
+    'Kırşehir',
+    'Kocaeli',
+    'Konya',
+    'Kütahya',
+    'Malatya',
+    'Manisa',
+    'Kahramanmaraş',
+    'Mardin',
+    'Muğla',
+    'Muş',
+    'Nevşehir',
+    'Niğde',
+    'Ordu',
+    'Rize',
+    'Sakarya',
+    'Samsun',
+    'Siirt',
+    'Sinop',
+    'Sivas',
+    'Tekirdağ',
+    'Tokat',
+    'Trabzon',
+    'Tunceli',
+    'Şanlıurfa',
+    'Uşak',
+    'Van',
+    'Yozgat',
+    'Zonguldak',
+    'Aksaray',
+    'Bayburt',
+    'Karaman',
+    'Kırıkkale',
+    'Batman',
+    'Şırnak',
+    'Bartın',
+    'Ardahan',
+    'Iğdır',
+    'Yalova',
+    'Karabük',
+    'Kilis',
+    'Osmaniye',
+    'Düzce',
   ];
 
   final _picker = ImagePicker();
@@ -43,32 +119,72 @@ class _GecerkenIlanEklePageState extends State<GecerkenIlanEklePage> {
   final List<File> _pickedFiles = [];
   bool _saving = false;
 
+  Future<void> _goLogin() async {
+    if (!mounted) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+    );
+  }
+
   Future<void> _pickMultiImages() async {
     final images = await _picker.pickMultiImage(imageQuality: 80);
     if (images.isEmpty) return;
-    setState(() => _pickedFiles.addAll(images.map((e) => File(e.path))));
+
+    setState(() {
+      _pickedFiles.addAll(images.map((e) => File(e.path)));
+    });
   }
 
   void _snack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
   }
 
   Future<void> _save() async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      _snack('İlan eklemek için giriş yapmalısın.');
+      await _goLogin();
+      return;
+    }
+
     final title = _titleC.text.trim();
     final from = _fromC.text.trim();
     final to = _toC.text.trim();
     final note = _noteC.text.trim();
 
-    if (selectedRole == null) return _snack('Sürücü/Yolcu seç.');
-    if (selectedCity == null) return _snack('Şehir seç.');
-    if (from.isEmpty || to.isEmpty) return _snack('Nereden / Nereye zorunlu.');
-    if (_pickedFiles.isEmpty) return _snack('En az 1 foto seç.');
+    if (selectedRole == null) {
+      _snack('Sürücü/Yolcu seç.');
+      return;
+    }
+
+    if (selectedCity == null) {
+      _snack('Şehir seç.');
+      return;
+    }
+
+    if (from.isEmpty || to.isEmpty) {
+      _snack('Nereden / Nereye zorunlu.');
+      return;
+    }
+
+    if (_pickedFiles.isEmpty) {
+      _snack('En az 1 foto seç.');
+      return;
+    }
 
     setState(() => _saving = true);
+
     try {
       final photoUrls = await _imageService.uploadMultiple(_pickedFiles);
 
       final ref = _dbRef.push();
+
       final ilan = GecerkenModel(
         id: ref.key ?? '',
         title: title,
@@ -81,8 +197,14 @@ class _GecerkenIlanEklePageState extends State<GecerkenIlanEklePage> {
         photoUrls: photoUrls,
       );
 
-      await ref.set(ilan.toMap());
+      final data = ilan.toMap();
+      data['ownerId'] = user.uid;
+      data['status'] = 'active';
+
+      await ref.set(data);
+
       _snack('İlan eklendi ✅');
+
       if (mounted) Navigator.pop(context);
     } catch (e) {
       _snack('Hata: $e');
@@ -103,56 +225,60 @@ class _GecerkenIlanEklePageState extends State<GecerkenIlanEklePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('İlan Ekle')),
+      appBar: AppBar(
+        title: const Text('İlan Ekle'),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
             TextField(
               controller: _titleC,
-              decoration: const InputDecoration(labelText: 'Başlık (opsiyonel)'),
+              enabled: !_saving,
+              decoration: const InputDecoration(
+                labelText: 'Başlık (opsiyonel)',
+              ),
             ),
             const SizedBox(height: 10),
-
             DropdownButtonFormField<String>(
               value: selectedRole,
               decoration: const InputDecoration(labelText: 'Sürücü / Yolcu'),
               items: roles
                   .map((r) => DropdownMenuItem(value: r, child: Text(r)))
                   .toList(),
-              onChanged: _saving ? null : (v) => setState(() => selectedRole = v),
+              onChanged:
+                  _saving ? null : (v) => setState(() => selectedRole = v),
             ),
             const SizedBox(height: 10),
-
             DropdownButtonFormField<String>(
               value: selectedCity,
               decoration: const InputDecoration(labelText: 'Şehir'),
               items: sehirler
                   .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                   .toList(),
-              onChanged: _saving ? null : (v) => setState(() => selectedCity = v),
+              onChanged:
+                  _saving ? null : (v) => setState(() => selectedCity = v),
             ),
             const SizedBox(height: 10),
-
             TextField(
               controller: _fromC,
+              enabled: !_saving,
               decoration: const InputDecoration(labelText: 'Nereden'),
             ),
             const SizedBox(height: 10),
-
             TextField(
               controller: _toC,
+              enabled: !_saving,
               decoration: const InputDecoration(labelText: 'Nereye'),
             ),
             const SizedBox(height: 10),
-
             TextField(
               controller: _noteC,
+              enabled: !_saving,
               maxLines: 3,
               decoration: const InputDecoration(labelText: 'Not / Açıklama'),
             ),
             const SizedBox(height: 12),
-
             Row(
               children: [
                 ElevatedButton.icon(
@@ -165,17 +291,16 @@ class _GecerkenIlanEklePageState extends State<GecerkenIlanEklePage> {
               ],
             ),
             const SizedBox(height: 12),
-
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _saving ? null : _save,
                 child: _saving
                     ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Text('Kaydet'),
               ),
             ),
