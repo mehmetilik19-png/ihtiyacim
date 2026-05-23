@@ -141,6 +141,66 @@ class _ProfilePageState extends State<ProfilePage> {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  Future<void> _deleteAccount() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Hesabı Sil'),
+          content: const Text(
+            'Hesabını silmek istediğine emin misin? Bu işlem geri alınamaz.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Vazgeç'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Hesabı Sil'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final user = _auth.currentUser;
+
+      if (user == null) return;
+
+      final uid = user.uid;
+
+      await _db.ref('users/$uid').remove();
+
+      await user.delete();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Hesap silindi')),
+      );
+
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Hesap silinemedi. Lütfen tekrar giriş yapıp yeniden deneyin. Hata: $e',
+          ),
+        ),
+      );
+    }
+  }
+
   void _openMyOrders() {
     Navigator.push(
       context,
@@ -331,6 +391,19 @@ class _ProfilePageState extends State<ProfilePage> {
               icon: const Icon(Icons.logout),
               label: const Text('Çıkış Yap'),
               onPressed: _logout,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.delete_forever),
+              label: const Text('Hesabımı Sil'),
+              onPressed: _deleteAccount,
             ),
           ),
         ],
