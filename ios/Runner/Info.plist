@@ -37,13 +37,13 @@
 	<true/>
 
 	<key>NSCameraUsageDescription</key>
-	<string>Uygulama kamera erişimine ihtiyaç duyabilir.</string>
+	<string>İlan paylaşırken ürün, eşya, hayvan veya hizmet fotoğrafı çekebilmek için kamera erişimi gerekir.</string>
 
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Uygulama fotoğraf seçmek için galeri erişimine ihtiyaç duyabilir.</string>
+	<string>İlan paylaşırken ürün, eşya, hayvan veya hizmet fotoğraflarını galeriden seçebilmek için fotoğraf erişimi gerekir.</string>
 
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Uygulama fotoğraf kaydetmek için galeri erişimine ihtiyaç duyabilir.</string>
+	<string>Uygulamada oluşturulan veya seçilen görselleri cihaza kaydedebilmek için galeriye yazma erişimi gerekir.</string>
 
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Uygulama konumunuzu kullanarak size yakın içerikleri gösterebilir.</string>
