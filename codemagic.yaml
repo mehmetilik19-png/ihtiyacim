@@ -107,6 +107,9 @@ workflows:
       - name: Generate Android keystore and properties
         script: |
           rm -f android/app/upload-keystore.jks
+          rm -f android/key.properties
+          rm -f android/app/key.properties
+
           keytool -genkeypair -v \
             -keystore android/app/upload-keystore.jks \
             -storepass 123456 \
@@ -118,6 +121,13 @@ workflows:
             -dname "CN=Mehmet, OU=Dev, O=Ihtiyacim, L=TR, S=TR, C=TR"
 
           cat > android/key.properties <<EOF
+          storePassword=123456
+          keyPassword=123456
+          keyAlias=upload
+          storeFile=upload-keystore.jks
+          EOF
+
+          cat > android/app/key.properties <<EOF
           storePassword=123456
           keyPassword=123456
           keyAlias=upload
