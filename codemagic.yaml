@@ -111,6 +111,7 @@ workflows:
           rm -f android/app/key.properties
 
           keytool -genkeypair -v \
+            -storetype JKS \
             -keystore android/app/upload-keystore.jks \
             -storepass 123456 \
             -keypass 123456 \
