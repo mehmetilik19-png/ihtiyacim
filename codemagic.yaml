@@ -104,48 +104,6 @@ workflows:
       - name: Get dependencies
         script: flutter pub get
 
-      - name: Generate Android keystore and force signing
-        script: |
-          rm -f android/app/upload-keystore.jks
-          rm -f android/key.properties
-          rm -f android/app/key.properties
-
-          keytool -genkeypair -v \
-            -storetype JKS \
-            -keystore android/app/upload-keystore.jks \
-            -storepass 123456 \
-            -keypass 123456 \
-            -alias upload \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=Mehmet, OU=Dev, O=Ihtiyacim, L=TR, S=TR, C=TR"
-
-          cat > android/key.properties <<EOF
-          storePassword=123456
-          keyPassword=123456
-          keyAlias=upload
-          storeFile=upload-keystore.jks
-          EOF
-
-          cat > android/app/key.properties <<EOF
-          storePassword=123456
-          keyPassword=123456
-          keyAlias=upload
-          storeFile=upload-keystore.jks
-          EOF
-
-          python3 <<'PY'
-          from pathlib import Path
-          p = Path("android/app/build.gradle.kts")
-          s = p.read_text()
-          s = s.replace('storePassword = keystoreProperties["storePassword"] as String', 'storePassword = "123456"')
-          s = s.replace('keyPassword = keystoreProperties["keyPassword"] as String', 'keyPassword = "123456"')
-          s = s.replace('keyAlias = keystoreProperties["keyAlias"] as String', 'keyAlias = "upload"')
-          s = s.replace('storeFile = file(keystoreProperties["storeFile"] as String)', 'storeFile = file("upload-keystore.jks")')
-          p.write_text(s)
-          PY
-
       - name: Build Android App Bundle
         script: flutter build appbundle --release --build-number=17 --build-name=1.0.17
 
