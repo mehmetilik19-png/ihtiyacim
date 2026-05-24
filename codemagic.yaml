@@ -37,7 +37,6 @@ workflows:
             echo "ERROR: ios/Runner/GoogleService-Info.plist missing"
             exit 1
           fi
-
           echo "Firebase plist found"
           /usr/libexec/PlistBuddy -c "Print :BUNDLE_ID" ios/Runner/GoogleService-Info.plist || true
           /usr/libexec/PlistBuddy -c "Print :GOOGLE_APP_ID" ios/Runner/GoogleService-Info.plist || true
@@ -88,3 +87,37 @@ workflows:
       app_store_connect:
         auth: integration
         submit_to_testflight: true
+
+  android-release:
+    name: Android Release
+    max_build_duration: 60
+    instance_type: linux
+
+    environment:
+      flutter: stable
+
+    scripts:
+      - name: Set app version
+        script: |
+          sed -i 's/^version:.*/version: 1.0.17+17/' pubspec.yaml
+
+      - name: Get dependencies
+        script: flutter pub get
+
+      - name: Generate Android keystore
+        script: |
+          keytool -genkey -v \
+            -keystore android/app/upload-keystore.jks \
+            -storepass 123456 \
+            -alias upload \
+            -keypass 123456 \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Mehmet, OU=Dev, O=Ihtiyacim, L=TR, S=TR, C=TR"
+
+      - name: Build Android App Bundle
+        script: flutter build appbundle --release --build-number=17 --build-name=1.0.17
+
+    artifacts:
+      - build/app/outputs/bundle/release/app-release.aab
