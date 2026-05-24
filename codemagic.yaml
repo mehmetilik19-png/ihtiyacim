@@ -104,17 +104,25 @@ workflows:
       - name: Get dependencies
         script: flutter pub get
 
-      - name: Generate Android keystore
+      - name: Generate Android keystore and properties
         script: |
-          keytool -genkey -v \
+          rm -f android/app/upload-keystore.jks
+          keytool -genkeypair -v \
             -keystore android/app/upload-keystore.jks \
             -storepass 123456 \
-            -alias upload \
             -keypass 123456 \
+            -alias upload \
             -keyalg RSA \
             -keysize 2048 \
             -validity 10000 \
             -dname "CN=Mehmet, OU=Dev, O=Ihtiyacim, L=TR, S=TR, C=TR"
+
+          cat > android/key.properties <<EOF
+          storePassword=123456
+          keyPassword=123456
+          keyAlias=upload
+          storeFile=upload-keystore.jks
+          EOF
 
       - name: Build Android App Bundle
         script: flutter build appbundle --release --build-number=17 --build-name=1.0.17
