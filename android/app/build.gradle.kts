@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.adin.ihtiyacim"
+    namespace = "com.esma.ihtiyacim"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -19,7 +19,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.adin.ihtiyacim"
+        applicationId = "com.esma.ihtiyacim"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
@@ -29,9 +29,9 @@ android {
     signingConfigs {
         create("release") {
             storeFile = file("upload-keystore.jks")
-            storePassword = "Ihtiyacim123!"
+            storePassword = "123456"
             keyAlias = "upload"
-            keyPassword = "Ihtiyacim123!"
+            keyPassword = "123456"
         }
     }
 
