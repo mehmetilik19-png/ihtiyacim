@@ -1,12 +1,12 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 
 import 'my_listings_page.dart';
-
-// ✅ Siparişlerim sayfası (features/orders içindeki)
 import 'package:ihtiyacim/features/orders/orders_page.dart';
+import 'package:ihtiyacim/features/auth/login_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -19,7 +19,6 @@ class _ProfilePageState extends State<ProfilePage> {
   final _auth = FirebaseAuth.instance;
   final _db = FirebaseDatabase.instance;
 
-  // ✅ Market yok (sen istemiyorsun)
   final Map<String, String> modulePaths = const {
     'esya_paylas': 'esya_paylas/items',
     'can_dostum': 'can_dostum/items',
@@ -28,7 +27,6 @@ class _ProfilePageState extends State<ProfilePage> {
     'gecerken_beni_de_al': 'gecerken_beni_de_al/items',
   };
 
-  // ✅ activity: users/uid/... yapın
   DatabaseReference _favRoot(String uid) => _db.ref('users/$uid/favorites');
   DatabaseReference _recentRoot(String uid) => _db.ref('users/$uid/recent');
 
@@ -49,11 +47,13 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  // --------- COUNT STREAMS (modül bazlı sayılar) ----------
+  Stream<Map<String, int>> _favCounts(String uid) {
+    return _moduleCountStream(_favRoot(uid));
+  }
 
-  Stream<Map<String, int>> _favCounts(String uid) => _moduleCountStream(_favRoot(uid));
-
-  Stream<Map<String, int>> _recentCounts(String uid) => _moduleCountStream(_recentRoot(uid));
+  Stream<Map<String, int>> _recentCounts(String uid) {
+    return _moduleCountStream(_recentRoot(uid));
+  }
 
   Stream<Map<String, int>> _myListingCounts(String uid) {
     final streams = modulePaths.entries.map((e) {
@@ -72,7 +72,10 @@ class _ProfilePageState extends State<ProfilePage> {
             final m = Map<dynamic, dynamic>.from(value);
             final ownerId = (m['ownerId'] ?? m['userId'] ?? '').toString();
             final status = (m['status'] ?? 'active').toString();
-            if (ownerId == uid && status != 'deleted') count++;
+
+            if (ownerId == uid && status != 'deleted') {
+              count++;
+            }
           }
         });
 
@@ -91,10 +94,10 @@ class _ProfilePageState extends State<ProfilePage> {
       final root = Map<dynamic, dynamic>.from(v as Map);
       final out = <String, int>{};
 
-      // { module: { itemId: {...} } }
       root.forEach((moduleKey, moduleVal) {
         if (moduleVal is Map) {
-          out[moduleKey.toString()] = Map<dynamic, dynamic>.from(moduleVal).length;
+          out[moduleKey.toString()] =
+              Map<dynamic, dynamic>.from(moduleVal).length;
         }
       });
 
@@ -102,8 +105,9 @@ class _ProfilePageState extends State<ProfilePage> {
     });
   }
 
-  // ✅ “Bad state: Stream has already been listened to” hatasını bitirir
-  Stream<Map<String, int>> _combineCountStreams(List<Stream<Map<String, int>>> streams) {
+  Stream<Map<String, int>> _combineCountStreams(
+    List<Stream<Map<String, int>>> streams,
+  ) {
     final ctrl = StreamController<Map<String, int>>.broadcast();
     final latest = <String, int>{};
     final subs = <StreamSubscription>[];
@@ -111,10 +115,12 @@ class _ProfilePageState extends State<ProfilePage> {
     void emit() => ctrl.add(Map<String, int>.from(latest));
 
     for (final s in streams) {
-      subs.add(s.listen((data) {
-        data.forEach((k, v) => latest[k] = v);
-        emit();
-      }));
+      subs.add(
+        s.listen((data) {
+          data.forEach((k, v) => latest[k] = v);
+          emit();
+        }),
+      );
     }
 
     ctrl.onCancel = () async {
@@ -129,15 +135,79 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _logout() async {
     await _auth.signOut();
+
     if (!mounted) return;
+
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
-  void _openMyOrders() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const OrdersPage()));
+  Future<void> _deleteAccount() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Hesabı Sil'),
+          content: const Text(
+            'Hesabını silmek istediğine emin misin? Bu işlem geri alınamaz.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Vazgeç'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Hesabı Sil'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final user = _auth.currentUser;
+
+      if (user == null) return;
+
+      final uid = user.uid;
+
+      await _db.ref('users/$uid').remove();
+
+      await user.delete();
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Hesap silindi')),
+      );
+
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Hesap silinemedi. Lütfen tekrar giriş yapıp yeniden deneyin. Hata: $e',
+          ),
+        ),
+      );
+    }
   }
 
-  // ✅ TIKLAYINCA LİSTE SAYFASI AÇAR
+  void _openMyOrders() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const OrdersPage()),
+    );
+  }
+
   void _openModuleList({
     required String moduleKey,
     required String groupTitle,
@@ -148,7 +218,6 @@ class _ProfilePageState extends State<ProfilePage> {
     final itemsPath = modulePaths[moduleKey];
     if (itemsPath == null) return;
 
-    // ✅ mode: my / fav / recent
     final String mode = groupTitle == 'İlanlarım'
         ? 'my'
         : (groupTitle == 'Favoriler' ? 'fav' : 'recent');
@@ -162,7 +231,62 @@ class _ProfilePageState extends State<ProfilePage> {
           moduleTitle: _titleOf(moduleKey),
           groupTitle: groupTitle,
           itemsPath: itemsPath,
-          mode: mode, // ✅ MyListingsPage'de mode varsa çalışır
+          mode: mode,
+        ),
+      ),
+    );
+  }
+
+  Widget _loginRequiredView() {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Profil'),
+      ),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(22),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.lock_outline,
+                size: 72,
+                color: Colors.blue,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Profilini görmek için giriş yapmalısın.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'İlanların, favorilerin, siparişlerin ve son baktıkların burada görünür.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.black54,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.login),
+                  label: const Text('Giriş Yap / Kayıt Ol'),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const LoginPage()),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -175,20 +299,20 @@ class _ProfilePageState extends State<ProfilePage> {
     final email = user?.email ?? '';
 
     if (uid.isEmpty) {
-      return const Scaffold(body: Center(child: Text('Giriş yapılmamış.')));
+      return _loginRequiredView();
     }
 
     final modules = modulePaths.keys.toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Profil')),
+      appBar: AppBar(
+        title: const Text('Profil'),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(14),
         children: [
           _UserCard(email: email, uid: uid),
           const SizedBox(height: 12),
-
-          // ✅ SİPARİŞLERİM (profil içine taşındı)
           Container(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(16),
@@ -197,21 +321,22 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             child: ListTile(
               leading: const Icon(Icons.shopping_bag_outlined),
-              title: const Text('Siparişlerim', style: TextStyle(fontWeight: FontWeight.w900)),
+              title: const Text(
+                'Siparişlerim',
+                style: TextStyle(fontWeight: FontWeight.w900),
+              ),
               subtitle: const Text('Market siparişlerini görüntüle'),
               trailing: const Icon(Icons.chevron_right),
               onTap: _openMyOrders,
             ),
           ),
-
           const SizedBox(height: 14),
-
-          // 1) İLANLARIM
           const _SectionTitle(title: 'İlanlarım', icon: Icons.list_alt),
           StreamBuilder<Map<String, int>>(
             stream: _myListingCounts(uid),
             builder: (context, snap) {
               final counts = snap.data ?? const <String, int>{};
+
               return _ModuleMenu(
                 modules: modules,
                 titleOf: _titleOf,
@@ -223,15 +348,13 @@ class _ProfilePageState extends State<ProfilePage> {
               );
             },
           ),
-
           const SizedBox(height: 14),
-
-          // 2) FAVORİLER
           const _SectionTitle(title: 'Favoriler', icon: Icons.star_border),
           StreamBuilder<Map<String, int>>(
             stream: _favCounts(uid),
             builder: (context, snap) {
               final counts = snap.data ?? const <String, int>{};
+
               return _ModuleMenu(
                 modules: modules,
                 titleOf: _titleOf,
@@ -243,15 +366,13 @@ class _ProfilePageState extends State<ProfilePage> {
               );
             },
           ),
-
           const SizedBox(height: 14),
-
-          // 3) SON BAKTIKLARIM
           const _SectionTitle(title: 'Son Baktıklarım', icon: Icons.history),
           StreamBuilder<Map<String, int>>(
             stream: _recentCounts(uid),
             builder: (context, snap) {
               final counts = snap.data ?? const <String, int>{};
+
               return _ModuleMenu(
                 modules: modules,
                 titleOf: _titleOf,
@@ -263,9 +384,7 @@ class _ProfilePageState extends State<ProfilePage> {
               );
             },
           ),
-
           const SizedBox(height: 18),
-
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
@@ -274,18 +393,33 @@ class _ProfilePageState extends State<ProfilePage> {
               onPressed: _logout,
             ),
           ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.delete_forever),
+              label: const Text('Hesabımı Sil'),
+              onPressed: _deleteAccount,
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
-// ----------------- UI widgets -----------------
-
 class _UserCard extends StatelessWidget {
   final String email;
   final String uid;
-  const _UserCard({required this.email, required this.uid});
+
+  const _UserCard({
+    required this.email,
+    required this.uid,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -298,7 +432,9 @@ class _UserCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const CircleAvatar(child: Icon(Icons.person)),
+          const CircleAvatar(
+            child: Icon(Icons.person),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -306,10 +442,16 @@ class _UserCard extends StatelessWidget {
               children: [
                 Text(
                   email.isEmpty ? 'Kullanıcı' : email,
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
                 ),
                 const SizedBox(height: 4),
-                Text('UID: $uid', style: const TextStyle(color: Colors.black54)),
+                Text(
+                  'UID: $uid',
+                  style: const TextStyle(color: Colors.black54),
+                ),
               ],
             ),
           ),
@@ -322,7 +464,11 @@ class _UserCard extends StatelessWidget {
 class _SectionTitle extends StatelessWidget {
   final String title;
   final IconData icon;
-  const _SectionTitle({required this.title, required this.icon});
+
+  const _SectionTitle({
+    required this.title,
+    required this.icon,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -332,7 +478,13 @@ class _SectionTitle extends StatelessWidget {
         children: [
           Icon(icon),
           const SizedBox(width: 8),
-          Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900)),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ],
       ),
     );
@@ -364,13 +516,21 @@ class _ModuleMenu extends StatelessWidget {
         children: [
           for (int i = 0; i < modules.length; i++) ...[
             ListTile(
-              title: Text(titleOf(modules[i]), style: const TextStyle(fontWeight: FontWeight.w800)),
-              trailing: Text((counts[modules[i]] ?? 0).toString(),
-                  style: const TextStyle(fontWeight: FontWeight.w900)),
+              title: Text(
+                titleOf(modules[i]),
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              trailing: Text(
+                (counts[modules[i]] ?? 0).toString(),
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
               onTap: () => onTap(modules[i]),
             ),
             if (i != modules.length - 1)
-              Divider(height: 1, color: Colors.black.withOpacity(.06)),
+              Divider(
+                height: 1,
+                color: Colors.black.withOpacity(.06),
+              ),
           ],
         ],
       ),

@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:image_picker/image_picker.dart';
@@ -6,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../models/ilan_model.dart';
 import '../services/ai_image_service.dart';
+import '../features/auth/login_page.dart';
 
 class EsyaIlanEklePage extends StatefulWidget {
   const EsyaIlanEklePage({super.key});
@@ -80,15 +82,87 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
   };
 
   static const List<String> sehirler = [
-    'Adana','Adıyaman','Afyonkarahisar','Ağrı','Amasya','Ankara','Antalya','Artvin','Aydın',
-    'Balıkesir','Bilecik','Bingöl','Bitlis','Bolu','Burdur','Bursa','Çanakkale','Çankırı',
-    'Çorum','Denizli','Diyarbakır','Edirne','Elazığ','Erzincan','Erzurum','Eskişehir',
-    'Gaziantep','Giresun','Gümüşhane','Hakkari','Hatay','Isparta','Mersin','İstanbul','İzmir',
-    'Kars','Kastamonu','Kayseri','Kırklareli','Kırşehir','Kocaeli','Konya','Kütahya','Malatya',
-    'Manisa','Kahramanmaraş','Mardin','Muğla','Muş','Nevşehir','Niğde','Ordu','Rize','Sakarya',
-    'Samsun','Siirt','Sinop','Sivas','Tekirdağ','Tokat','Trabzon','Tunceli','Şanlıurfa','Uşak',
-    'Van','Yozgat','Zonguldak','Aksaray','Bayburt','Karaman','Kırıkkale','Batman','Şırnak',
-    'Bartın','Ardahan','Iğdır','Yalova','Karabük','Kilis','Osmaniye','Düzce',
+    'Adana',
+    'Adıyaman',
+    'Afyonkarahisar',
+    'Ağrı',
+    'Amasya',
+    'Ankara',
+    'Antalya',
+    'Artvin',
+    'Aydın',
+    'Balıkesir',
+    'Bilecik',
+    'Bingöl',
+    'Bitlis',
+    'Bolu',
+    'Burdur',
+    'Bursa',
+    'Çanakkale',
+    'Çankırı',
+    'Çorum',
+    'Denizli',
+    'Diyarbakır',
+    'Edirne',
+    'Elazığ',
+    'Erzincan',
+    'Erzurum',
+    'Eskişehir',
+    'Gaziantep',
+    'Giresun',
+    'Gümüşhane',
+    'Hakkari',
+    'Hatay',
+    'Isparta',
+    'Mersin',
+    'İstanbul',
+    'İzmir',
+    'Kars',
+    'Kastamonu',
+    'Kayseri',
+    'Kırklareli',
+    'Kırşehir',
+    'Kocaeli',
+    'Konya',
+    'Kütahya',
+    'Malatya',
+    'Manisa',
+    'Kahramanmaraş',
+    'Mardin',
+    'Muğla',
+    'Muş',
+    'Nevşehir',
+    'Niğde',
+    'Ordu',
+    'Rize',
+    'Sakarya',
+    'Samsun',
+    'Siirt',
+    'Sinop',
+    'Sivas',
+    'Tekirdağ',
+    'Tokat',
+    'Trabzon',
+    'Tunceli',
+    'Şanlıurfa',
+    'Uşak',
+    'Van',
+    'Yozgat',
+    'Zonguldak',
+    'Aksaray',
+    'Bayburt',
+    'Karaman',
+    'Kırıkkale',
+    'Batman',
+    'Şırnak',
+    'Bartın',
+    'Ardahan',
+    'Iğdır',
+    'Yalova',
+    'Karabük',
+    'Kilis',
+    'Osmaniye',
+    'Düzce',
   ];
 
   final _picker = ImagePicker();
@@ -96,6 +170,15 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
 
   final List<File> _pickedFiles = [];
   bool _saving = false;
+
+  Future<void> _goLogin() async {
+    if (!mounted) return;
+
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+    );
+  }
 
   Future<void> _pickMultiImages() async {
     final images = await _picker.pickMultiImage(imageQuality: 80);
@@ -107,6 +190,14 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
   }
 
   Future<void> _saveIlan() async {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      _snack('İlan eklemek için giriş yapmalısın.');
+      await _goLogin();
+      return;
+    }
+
     final title = _titleC.text.trim();
     final desc = _descC.text.trim();
 
@@ -127,12 +218,6 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
 
     if (_pickedFiles.isEmpty) {
       _snack('En az 1 foto seç');
-      return;
-    }
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      _snack('Önce giriş yapmalısın');
       return;
     }
 
@@ -172,7 +257,10 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
   }
 
   void _snack(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
   }
 
   @override
@@ -200,7 +288,9 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
                 value: 'free',
                 groupValue: _tradeType,
                 title: const Text('Ücretsiz'),
-                onChanged: _saving ? null : (v) => setState(() => _tradeType = v!),
+                onChanged: _saving
+                    ? null
+                    : (v) => setState(() => _tradeType = v!),
               ),
             ),
             Expanded(
@@ -210,7 +300,9 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
                 value: 'swap',
                 groupValue: _tradeType,
                 title: const Text('Takas'),
-                onChanged: _saving ? null : (v) => setState(() => _tradeType = v!),
+                onChanged: _saving
+                    ? null
+                    : (v) => setState(() => _tradeType = v!),
               ),
             ),
           ],
@@ -224,7 +316,9 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
     final altKategoriler = kategoriMap[selectedAnaKategori] ?? [];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('İlan Ekle')),
+      appBar: AppBar(
+        title: const Text('İlan Ekle'),
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(12),
         child: Column(
@@ -234,13 +328,9 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
               enabled: !_saving,
               decoration: const InputDecoration(labelText: 'Başlık'),
             ),
-
             const SizedBox(height: 10),
-
             _tradeTypeSelector(),
-
             const SizedBox(height: 10),
-
             DropdownButtonFormField<String>(
               value: selectedAnaKategori,
               decoration: const InputDecoration(labelText: 'Ana Kategori'),
@@ -250,46 +340,40 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
               onChanged: _saving
                   ? null
                   : (v) {
-                setState(() {
-                  selectedAnaKategori = v!;
-                  selectedAltKategori = null;
-                });
-              },
+                      setState(() {
+                        selectedAnaKategori = v!;
+                        selectedAltKategori = null;
+                      });
+                    },
             ),
-
             const SizedBox(height: 10),
-
             DropdownButtonFormField<String>(
               value: selectedAltKategori,
               decoration: const InputDecoration(labelText: 'Alt Kategori'),
               items: altKategoriler
                   .map((k) => DropdownMenuItem(value: k, child: Text(k)))
                   .toList(),
-              onChanged: _saving ? null : (v) => setState(() => selectedAltKategori = v),
+              onChanged:
+                  _saving ? null : (v) => setState(() => selectedAltKategori = v),
             ),
-
             const SizedBox(height: 10),
-
             DropdownButtonFormField<String>(
               value: selectedSehir,
               decoration: const InputDecoration(labelText: 'Şehir'),
               items: sehirler
                   .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                   .toList(),
-              onChanged: _saving ? null : (v) => setState(() => selectedSehir = v),
+              onChanged:
+                  _saving ? null : (v) => setState(() => selectedSehir = v),
             ),
-
             const SizedBox(height: 10),
-
             TextField(
               controller: _descC,
               enabled: !_saving,
               maxLines: 3,
               decoration: const InputDecoration(labelText: 'Açıklama'),
             ),
-
             const SizedBox(height: 12),
-
             Row(
               children: [
                 ElevatedButton.icon(
@@ -301,19 +385,17 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
                 Text('${_pickedFiles.length} foto'),
               ],
             ),
-
             const SizedBox(height: 12),
-
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _saving ? null : _saveIlan,
                 child: _saving
                     ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Text('Kaydet'),
               ),
             ),

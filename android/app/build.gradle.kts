@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.adin.ihtiyacim"
+    namespace = "com.esma.ihtiyacim"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 

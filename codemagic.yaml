@@ -1,0 +1,111 @@
+workflows:
+  ios-release:
+    name: iOS Release
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    integrations:
+      app_store_connect: Codemagic
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.esma.ihtiyacim
+
+    scripts:
+      - name: Set app version
+        script: |
+          sed -i '' 's/^version:.*/version: 1.0.17+17/' pubspec.yaml
+
+      - name: Set bundle id
+        script: |
+          grep -rl "com.ihtiyacim.ihtiyacim" ios | xargs sed -i '' 's/com.ihtiyacim.ihtiyacim/com.esma.ihtiyacim/g' || true
+          grep -rl "com.adin.ihtiyacim" ios | xargs sed -i '' 's/com.adin.ihtiyacim/com.esma.ihtiyacim/g' || true
+
+      - name: Force iOS deployment target
+        script: |
+          sed -i '' "s/platform :ios, '[0-9.]*'/platform :ios, '14.0'/g" ios/Podfile
+          sed -i '' "s/IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*;/IPHONEOS_DEPLOYMENT_TARGET = 14.0;/g" ios/Runner.xcodeproj/project.pbxproj
+          /usr/libexec/PlistBuddy -c "Set :MinimumOSVersion 14.0" ios/Flutter/AppFrameworkInfo.plist || true
+
+      - name: Check Firebase plist
+        script: |
+          if [ ! -f "ios/Runner/GoogleService-Info.plist" ]; then
+            echo "ERROR: ios/Runner/GoogleService-Info.plist missing"
+            exit 1
+          fi
+          echo "Firebase plist found"
+          /usr/libexec/PlistBuddy -c "Print :BUNDLE_ID" ios/Runner/GoogleService-Info.plist || true
+          /usr/libexec/PlistBuddy -c "Print :GOOGLE_APP_ID" ios/Runner/GoogleService-Info.plist || true
+
+      - name: Disable iPad support
+        script: |
+          sed -i '' 's/TARGETED_DEVICE_FAMILY = "1,2";/TARGETED_DEVICE_FAMILY = 1;/g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/TARGETED_DEVICE_FAMILY = 2;/TARGETED_DEVICE_FAMILY = 1;/g' ios/Runner.xcodeproj/project.pbxproj
+
+      - name: Get dependencies
+        script: flutter pub get
+
+      - name: Install pods
+        script: |
+          cd ios
+          pod install --repo-update
+          cd ..
+
+      - name: Set up code signing
+        script: |
+          xcode-project use-profiles
+          cat > ios/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>signingStyle</key>
+            <string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.esma.ihtiyacim</key>
+              <string>ihtiyacim-profile</string>
+            </dict>
+          </dict>
+          </plist>
+          EOF
+
+      - name: Build IPA
+        script: flutter build ipa --release --build-number=17 --build-name=1.0.17 --export-options-plist=ios/ExportOptions.plist
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - build/ios/archive/*.xcarchive
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+
+  android-release:
+    name: Android Release
+    max_build_duration: 60
+    instance_type: linux
+
+    environment:
+      flutter: stable
+
+    scripts:
+      - name: Set app version
+        script: |
+          sed -i 's/^version:.*/version: 1.0.17+17/' pubspec.yaml
+
+      - name: Get dependencies
+        script: flutter pub get
+
+      - name: Build Android App Bundle
+        script: flutter build appbundle --release --build-number=17 --build-name=1.0.17
+
+    artifacts:
+      - build/app/outputs/bundle/release/app-release.aab

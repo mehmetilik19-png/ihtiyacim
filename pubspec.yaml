@@ -1,7 +1,8 @@
 name: ihtiyacim
 description: Ihtiyacim mobil uygulamasi
 publish_to: 'none'
-version: 1.0.0+11
+version: 1.0.0+10
+
 environment:
   sdk: ">=3.1.0 <4.0.0"
 
@@ -10,22 +11,41 @@ dependencies:
     sdk: flutter
 
   cupertino_icons: ^1.0.8
+
+  # UI
   google_fonts: ^6.2.1
   url_launcher: ^6.3.0
   google_maps_flutter: ^2.6.0
+
+  # Konum
   geolocator: ^12.0.0
-  firebase_core: ^2.27.0
-  firebase_auth: ^4.17.8
-  cloud_firestore: ^4.6.12
-  firebase_database: ^10.4.5
+
+  # Firebase
+  firebase_core: ^3.15.2
+  firebase_auth: ^5.7.0
+  cloud_firestore: ^5.6.12
+  firebase_database: ^11.3.10
+  firebase_storage: ^12.4.10
+
+  # Utils
   intl: ^0.19.0
+
+  # Foto seçme
   image_picker: ^1.1.2
+
+  # API çağrıları
   http: ^1.2.2
+
+  # id üretmek için
   uuid: ^4.4.0
+
+  # local kayıt
   shared_preferences: ^2.2.3
   webview_flutter: ^4.7.0
+
   cached_network_image: ^3.3.1
-  firebase_storage: ^11.0.0
+
+  # 🔊 SES
   audioplayers: ^6.5.1
 
 dev_dependencies:
@@ -33,7 +53,6 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^3.0.0
   flutter_launcher_icons: ^0.13.1
-  flutter_native_splash: ^2.4.1
 
 flutter:
   uses-material-design: true
@@ -48,10 +67,3 @@ flutter_icons:
   ios: true
   image_path: "assets/icon/Adsız tasarım.png"
   min_sdk_android: 21
-
-flutter_native_splash:
-  color: "#ffffff"
-  image: "assets/icon/Adsız tasarım.png"
-  android: true
-  ios: true
-  fullscreen: true
