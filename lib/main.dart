@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 
-import 'splash_page.dart';
 import 'firebase_options.dart';
 import 'package:ihtiyacim/features/auth/aut_gate.dart';
+import 'splash_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
