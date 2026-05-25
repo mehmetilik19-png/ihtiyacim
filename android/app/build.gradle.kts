@@ -19,7 +19,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.esma.ihtiyacim"
+        applicationId = "com.adin.ihtiyacim"
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
