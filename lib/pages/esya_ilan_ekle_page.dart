@@ -227,27 +227,38 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
       final photoUrls = await _imageService.uploadMultiple(_pickedFiles);
 
       final ref = _dbRef.push();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final id = ref.key ?? '';
 
       final ilan = IlanModel(
-        id: ref.key ?? '',
+        id: id,
         title: title,
         category: selectedAltKategori!,
         city: selectedSehir!,
         desc: desc,
-        createdAt: DateTime.now().millisecondsSinceEpoch,
+        createdAt: now,
         photoUrls: photoUrls,
         ownerId: user.uid,
         status: 'active',
         tradeType: _tradeType,
       );
 
-      await ref.set({
-        ...ilan.toMap(),
-        'mainCategory': selectedAnaKategori,
-        'subCategory': selectedAltKategori,
-      });
+      final data = ilan.toMap();
+
+      data['id'] = id;
+      data['ownerId'] = user.uid;
+      data['userId'] = user.uid;
+      data['createdBy'] = user.uid;
+      data['status'] = 'active';
+      data['createdAt'] = now;
+      data['mainCategory'] = selectedAnaKategori;
+      data['subCategory'] = selectedAltKategori;
+      data['tradeType'] = _tradeType;
+
+      await ref.set(data);
 
       _snack('İlan eklendi');
+
       if (mounted) Navigator.pop(context);
     } catch (e) {
       _snack('Hata: $e');
@@ -258,6 +269,7 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
 
   void _snack(String msg) {
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg)),
     );
@@ -340,11 +352,11 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
               onChanged: _saving
                   ? null
                   : (v) {
-                      setState(() {
-                        selectedAnaKategori = v!;
-                        selectedAltKategori = null;
-                      });
-                    },
+                setState(() {
+                  selectedAnaKategori = v!;
+                  selectedAltKategori = null;
+                });
+              },
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
@@ -354,7 +366,7 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
                   .map((k) => DropdownMenuItem(value: k, child: Text(k)))
                   .toList(),
               onChanged:
-                  _saving ? null : (v) => setState(() => selectedAltKategori = v),
+              _saving ? null : (v) => setState(() => selectedAltKategori = v),
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
@@ -364,7 +376,7 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
                   .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                   .toList(),
               onChanged:
-                  _saving ? null : (v) => setState(() => selectedSehir = v),
+              _saving ? null : (v) => setState(() => selectedSehir = v),
             ),
             const SizedBox(height: 10),
             TextField(
@@ -392,10 +404,10 @@ class _EsyaIlanEklePageState extends State<EsyaIlanEklePage> {
                 onPressed: _saving ? null : _saveIlan,
                 child: _saving
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
                     : const Text('Kaydet'),
               ),
             ),

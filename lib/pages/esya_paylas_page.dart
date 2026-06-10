@@ -28,63 +28,13 @@ class _EsyaPaylasPageState extends State<EsyaPaylasPage> {
 
   final Map<String, List<String>> _categoryMap = const {
     'Tümü': ['Tümü'],
-    'Beyaz Eşya': [
-      'Tümü',
-      'Buzdolabı',
-      'Çamaşır Makinesi',
-      'Bulaşık Makinesi',
-      'Fırın',
-      'Ocak',
-      'Derin Dondurucu',
-    ],
-    'Mobilya': [
-      'Tümü',
-      'Koltuk',
-      'Kanepe',
-      'Yatak',
-      'Masa',
-      'Sandalye',
-      'Dolap',
-    ],
-    'Elektronik': [
-      'Tümü',
-      'Telefon',
-      'Tablet',
-      'Bilgisayar',
-      'Televizyon',
-      'Küçük Ev Aleti',
-    ],
-    'Giyim': [
-      'Tümü',
-      'Kadın',
-      'Erkek',
-      'Çocuk',
-      'Ayakkabı',
-      'Mont',
-    ],
-    'Mutfak': [
-      'Tümü',
-      'Tencere',
-      'Tabak',
-      'Bardak',
-      'Çatal Kaşık',
-      'Mutfak Robotu',
-    ],
-    'Kitap': [
-      'Tümü',
-      'Roman',
-      'Ders Kitabı',
-      'Çocuk Kitabı',
-      'Kırtasiye',
-    ],
-    'Diğer': [
-      'Tümü',
-      'Oyuncak',
-      'Bebek Ürünü',
-      'Spor',
-      'Bahçe',
-      'Diğer',
-    ],
+    'Beyaz Eşya': ['Tümü', 'Buzdolabı', 'Çamaşır Makinesi', 'Bulaşık Makinesi', 'Fırın', 'Ocak', 'Derin Dondurucu'],
+    'Mobilya': ['Tümü', 'Koltuk', 'Kanepe', 'Yatak', 'Masa', 'Sandalye', 'Dolap'],
+    'Elektronik': ['Tümü', 'Telefon', 'Tablet', 'Bilgisayar', 'Televizyon', 'Küçük Ev Aleti'],
+    'Giyim': ['Tümü', 'Kadın', 'Erkek', 'Çocuk', 'Ayakkabı', 'Mont'],
+    'Mutfak': ['Tümü', 'Tencere', 'Tabak', 'Bardak', 'Çatal Kaşık', 'Mutfak Robotu'],
+    'Kitap': ['Tümü', 'Roman', 'Ders Kitabı', 'Çocuk Kitabı', 'Kırtasiye'],
+    'Diğer': ['Tümü', 'Oyuncak', 'Bebek Ürünü', 'Spor', 'Bahçe', 'Diğer'],
   };
 
   Stream<List<IlanModel>> getEsyaIlanlar() {
@@ -97,12 +47,7 @@ class _EsyaPaylasPageState extends State<EsyaPaylasPage> {
 
       map.forEach((key, value) {
         if (value is Map) {
-          list.add(
-            IlanModel.fromMap(
-              key.toString(),
-              Map<dynamic, dynamic>.from(value),
-            ),
-          );
+          list.add(IlanModel.fromMap(key.toString(), Map<dynamic, dynamic>.from(value)));
         }
       });
 
@@ -125,6 +70,30 @@ class _EsyaPaylasPageState extends State<EsyaPaylasPage> {
     return subs.contains(itemCategory) || itemCategory == _selectedMainCategory;
   }
 
+  bool _matchesTrade(IlanModel item) {
+    if (_tradeFilter == _TradeFilter.all) return true;
+
+    final text = '${item.title} ${item.desc} ${item.category}'.toLowerCase();
+
+    if (_tradeFilter == _TradeFilter.free) {
+      return text.contains('ücretsiz') || text.contains('bedava') || text.contains('ver');
+    }
+
+    if (_tradeFilter == _TradeFilter.swap) {
+      return text.contains('takas');
+    }
+
+    return true;
+  }
+
+  void _selectMainCategory(String category) {
+    setState(() {
+      _selectedMainCategory = category;
+      _selectedSubCategory = 'Tümü';
+    });
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final mainCategories = _categoryMap.keys.toList();
@@ -132,12 +101,77 @@ class _EsyaPaylasPageState extends State<EsyaPaylasPage> {
 
     return Scaffold(
       backgroundColor: _bgColor,
+
+      drawer: Drawer(
+        backgroundColor: _bgColor,
+        child: SafeArea(
+          child: Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEADFE3),
+                ),
+                child: const Text(
+                  'Kategoriler',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: mainCategories.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, i) {
+                    final main = mainCategories[i];
+                    final selected = main == _selectedMainCategory;
+
+                    return ListTile(
+                      selected: selected,
+                      selectedTileColor: const Color(0xFFEADFE3),
+                      tileColor: _cardColor,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        side: const BorderSide(color: _borderColor),
+                      ),
+                      title: Text(
+                        main,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          color: selected ? Colors.black : Colors.black87,
+                        ),
+                      ),
+                      trailing: selected ? const Icon(Icons.check_rounded) : null,
+                      onTap: () => _selectMainCategory(main),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+
       appBar: AppBar(
-        title: const Text('Gönülden Paylaş'),
+        title: Text(_selectedMainCategory == 'Tümü'
+            ? 'Gönülden Paylaş'
+            : _selectedMainCategory),
         backgroundColor: _bgColor,
         foregroundColor: Colors.black,
         elevation: 0,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu_rounded, size: 32),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
       ),
+
       floatingActionButton: FloatingActionButton(
         backgroundColor: const Color(0xFFEADFE3),
         foregroundColor: Colors.black,
@@ -149,6 +183,7 @@ class _EsyaPaylasPageState extends State<EsyaPaylasPage> {
         },
         child: const Icon(Icons.add),
       ),
+
       body: StreamBuilder<List<IlanModel>>(
         stream: getEsyaIlanlar(),
         builder: (context, snapshot) {
@@ -162,7 +197,10 @@ class _EsyaPaylasPageState extends State<EsyaPaylasPage> {
 
           final items = snapshot.data ?? [];
 
-          var filtered = items.where(_matchesCategory).toList();
+          final filtered = items
+              .where(_matchesCategory)
+              .where(_matchesTrade)
+              .toList();
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -194,8 +232,7 @@ class _EsyaPaylasPageState extends State<EsyaPaylasPage> {
                       ),
                       SizedBox(height: 10),
                       Text(
-                        'Bu alandaki paylaşımların gerçekten ihtiyacı olana ulaşmasını '
-                            'önemsiyoruz. Süreci takip ediyoruz; siz de gönül rahatlığıyla paylaşabilirsiniz.',
+                        'Bu alandaki paylaşımların gerçekten ihtiyacı olana ulaşmasını önemsiyoruz. Süreci takip ediyoruz; siz de gönül rahatlığıyla paylaşabilirsiniz.',
                         style: TextStyle(
                           fontSize: 12.8,
                           height: 1.35,
@@ -263,172 +300,116 @@ class _EsyaPaylasPageState extends State<EsyaPaylasPage> {
               const SizedBox(height: 10),
 
               Expanded(
-                child: Row(
-                  children: [
-                    Container(
-                      width: 108,
-                      padding: const EdgeInsets.only(left: 10, bottom: 12),
-                      child: ListView.separated(
-                        itemCount: mainCategories.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 8),
-                        itemBuilder: (context, i) {
-                          final main = mainCategories[i];
-                          final selected = main == _selectedMainCategory;
-
-                          return InkWell(
-                            borderRadius: BorderRadius.circular(14),
-                            onTap: () {
-                              setState(() {
-                                _selectedMainCategory = main;
-                                _selectedSubCategory = 'Tümü';
-                              });
-                            },
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 10,
-                                vertical: 12,
-                              ),
-                              decoration: BoxDecoration(
-                                color: selected ? const Color(0xFFEADFE3) : _cardColor,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: _borderColor),
-                              ),
-                              child: Text(
-                                main,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: FontWeight.w800,
-                                  color: selected ? Colors.black : Colors.black87,
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-
-                    const SizedBox(width: 8),
-
-                    Expanded(
-                      child: filtered.isEmpty
-                          ? Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(18),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Icon(
-                                Icons.volunteer_activism_outlined,
-                                size: 64,
-                                color: Colors.black26,
-                              ),
-                              SizedBox(height: 10),
-                              Text(
-                                'Henüz ilan yok.',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              SizedBox(height: 6),
-                              Text(
-                                'İhtiyaç fazlası bir ürünün varsa,\n'
-                                    'burada paylaşabilirsin.',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 13.5,
-                                  color: Colors.black54,
-                                  height: 1.35,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
+                child: filtered.isEmpty
+                    ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: const [
+                        Icon(
+                          Icons.volunteer_activism_outlined,
+                          size: 64,
+                          color: Colors.black26,
+                        ),
+                        SizedBox(height: 10),
+                        Text(
+                          'Henüz ilan yok.',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
-                      )
-                          : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(0, 0, 12, 12),
-                        itemCount: filtered.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (context, i) {
-                          final x = filtered[i];
-                          final cover = x.photoUrls.isNotEmpty
-                              ? x.photoUrls.first
-                              : null;
-
-                          return InkWell(
-                            borderRadius: BorderRadius.circular(16),
-                            onTap: () async {
-                              await UserActiveService.instance.addRecent(
-                                module: 'esya_paylas',
-                                itemId: x.id,
-                                payload: {
-                                  'title': x.title,
-                                  'subtitle': '${x.category} • ${x.city}',
-                                  'photo': cover ?? '',
-                                },
-                              );
-
-                              if (!context.mounted) return;
-
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => EsyaIlanDetayPage(ilan: x),
-                                ),
-                              );
-                            },
-                            child: Card(
-                              color: _cardColor,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                side: BorderSide(color: _borderColor),
-                              ),
-                              child: ListTile(
-                                leading: cover == null
-                                    ? Container(
-                                  width: 56,
-                                  height: 56,
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.04),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: _borderColor),
-                                  ),
-                                  child: const Icon(Icons.image_outlined),
-                                )
-                                    : ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: Image.network(
-                                    cover,
-                                    width: 56,
-                                    height: 56,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, __, ___) =>
-                                    const Icon(Icons.broken_image),
-                                  ),
-                                ),
-                                title: Text(
-                                  x.title,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                subtitle: Text(
-                                  '${x.category} • ${x.city}\n${x.desc}',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                isThreeLine: true,
-                                trailing: const Icon(Icons.chevron_right),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
+                        SizedBox(height: 6),
+                        Text(
+                          'İhtiyaç fazlası bir ürünün varsa,\nburada paylaşabilirsin.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontSize: 13.5,
+                            color: Colors.black54,
+                            height: 1.35,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                )
+                    : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 90),
+                  itemCount: filtered.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (context, i) {
+                    final x = filtered[i];
+                    final cover = x.photoUrls.isNotEmpty ? x.photoUrls.first : null;
+
+                    return InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: () async {
+                        await UserActiveService.instance.addRecent(
+                          module: 'esya_paylas',
+                          itemId: x.id,
+                          payload: {
+                            'title': x.title,
+                            'subtitle': '${x.category} • ${x.city}',
+                            'photo': cover ?? '',
+                          },
+                        );
+
+                        if (!context.mounted) return;
+
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => EsyaIlanDetayPage(ilan: x),
+                          ),
+                        );
+                      },
+                      child: Card(
+                        color: _cardColor,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: const BorderSide(color: _borderColor),
+                        ),
+                        child: ListTile(
+                          leading: cover == null
+                              ? Container(
+                            width: 56,
+                            height: 56,
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.04),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: _borderColor),
+                            ),
+                            child: const Icon(Icons.image_outlined),
+                          )
+                              : ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.network(
+                              cover,
+                              width: 56,
+                              height: 56,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.broken_image),
+                            ),
+                          ),
+                          title: Text(
+                            x.title,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Text(
+                            '${x.category} • ${x.city}\n${x.desc}',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          isThreeLine: true,
+                          trailing: const Icon(Icons.chevron_right),
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],

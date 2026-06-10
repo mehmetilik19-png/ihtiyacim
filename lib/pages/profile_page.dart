@@ -62,15 +62,16 @@ class _ProfilePageState extends State<ProfilePage> {
 
       return _db.ref(path).onValue.map((ev) {
         final v = ev.snapshot.value;
-        if (v == null) return <String, int>{moduleKey: 0};
+        if (v == null || v is! Map) return <String, int>{moduleKey: 0};
 
-        final map = Map<dynamic, dynamic>.from(v as Map);
+        final map = Map<dynamic, dynamic>.from(v);
         int count = 0;
 
         map.forEach((id, value) {
           if (value is Map) {
             final m = Map<dynamic, dynamic>.from(value);
-            final ownerId = (m['ownerId'] ?? m['userId'] ?? '').toString();
+            final ownerId =
+            (m['ownerId'] ?? m['userId'] ?? m['uid'] ?? '').toString();
             final status = (m['status'] ?? 'active').toString();
 
             if (ownerId == uid && status != 'deleted') {
@@ -89,15 +90,14 @@ class _ProfilePageState extends State<ProfilePage> {
   Stream<Map<String, int>> _moduleCountStream(DatabaseReference rootRef) {
     return rootRef.onValue.map((event) {
       final v = event.snapshot.value;
-      if (v == null) return <String, int>{};
+      if (v == null || v is! Map) return <String, int>{};
 
-      final root = Map<dynamic, dynamic>.from(v as Map);
+      final root = Map<dynamic, dynamic>.from(v);
       final out = <String, int>{};
 
       root.forEach((moduleKey, moduleVal) {
         if (moduleVal is Map) {
-          out[moduleKey.toString()] =
-              Map<dynamic, dynamic>.from(moduleVal).length;
+          out[moduleKey.toString()] = Map<dynamic, dynamic>.from(moduleVal).length;
         }
       });
 
@@ -106,8 +106,8 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Stream<Map<String, int>> _combineCountStreams(
-    List<Stream<Map<String, int>>> streams,
-  ) {
+      List<Stream<Map<String, int>>> streams,
+      ) {
     final ctrl = StreamController<Map<String, int>>.broadcast();
     final latest = <String, int>{};
     final subs = <StreamSubscription>[];
@@ -172,13 +172,11 @@ class _ProfilePageState extends State<ProfilePage> {
 
     try {
       final user = _auth.currentUser;
-
       if (user == null) return;
 
       final uid = user.uid;
 
       await _db.ref('users/$uid').remove();
-
       await user.delete();
 
       if (!mounted) return;
@@ -277,11 +275,17 @@ class _ProfilePageState extends State<ProfilePage> {
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.login),
                   label: const Text('Giriş Yap / Kayıt Ol'),
-                  onPressed: () {
-                    Navigator.push(
+                  onPressed: () async {
+                    await Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const LoginPage()),
                     );
+
+                    await FirebaseAuth.instance.currentUser?.reload();
+
+                    if (!mounted) return;
+
+                    setState(() {});
                   },
                 ),
               ),
@@ -294,120 +298,125 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    final user = _auth.currentUser;
-    final uid = user?.uid ?? '';
-    final email = user?.email ?? '';
+    return StreamBuilder<User?>(
+      stream: _auth.userChanges(),
+      builder: (context, authSnap) {
+        final user = authSnap.data ?? _auth.currentUser;
+        final uid = user?.uid ?? '';
+        final email = user?.email ?? '';
 
-    if (uid.isEmpty) {
-      return _loginRequiredView();
-    }
+        if (uid.isEmpty) {
+          return _loginRequiredView();
+        }
 
-    final modules = modulePaths.keys.toList();
+        final modules = modulePaths.keys.toList();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profil'),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(14),
-        children: [
-          _UserCard(email: email, uid: uid),
-          const SizedBox(height: 12),
-          Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              color: Colors.white,
-              border: Border.all(color: Colors.black.withOpacity(.06)),
-            ),
-            child: ListTile(
-              leading: const Icon(Icons.shopping_bag_outlined),
-              title: const Text(
-                'Siparişlerim',
-                style: TextStyle(fontWeight: FontWeight.w900),
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Profil'),
+          ),
+          body: ListView(
+            padding: const EdgeInsets.all(14),
+            children: [
+              _UserCard(email: email, uid: uid),
+              const SizedBox(height: 12),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: Colors.white,
+                  border: Border.all(color: Colors.black.withOpacity(.06)),
+                ),
+                child: ListTile(
+                  leading: const Icon(Icons.shopping_bag_outlined),
+                  title: const Text(
+                    'Siparişlerim',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
+                  subtitle: const Text('Market siparişlerini görüntüle'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _openMyOrders,
+                ),
               ),
-              subtitle: const Text('Market siparişlerini görüntüle'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: _openMyOrders,
-            ),
-          ),
-          const SizedBox(height: 14),
-          const _SectionTitle(title: 'İlanlarım', icon: Icons.list_alt),
-          StreamBuilder<Map<String, int>>(
-            stream: _myListingCounts(uid),
-            builder: (context, snap) {
-              final counts = snap.data ?? const <String, int>{};
+              const SizedBox(height: 14),
+              const _SectionTitle(title: 'İlanlarım', icon: Icons.list_alt),
+              StreamBuilder<Map<String, int>>(
+                stream: _myListingCounts(uid),
+                builder: (context, snap) {
+                  final counts = snap.data ?? const <String, int>{};
 
-              return _ModuleMenu(
-                modules: modules,
-                titleOf: _titleOf,
-                counts: counts,
-                onTap: (moduleKey) => _openModuleList(
-                  moduleKey: moduleKey,
-                  groupTitle: 'İlanlarım',
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 14),
-          const _SectionTitle(title: 'Favoriler', icon: Icons.star_border),
-          StreamBuilder<Map<String, int>>(
-            stream: _favCounts(uid),
-            builder: (context, snap) {
-              final counts = snap.data ?? const <String, int>{};
-
-              return _ModuleMenu(
-                modules: modules,
-                titleOf: _titleOf,
-                counts: counts,
-                onTap: (moduleKey) => _openModuleList(
-                  moduleKey: moduleKey,
-                  groupTitle: 'Favoriler',
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 14),
-          const _SectionTitle(title: 'Son Baktıklarım', icon: Icons.history),
-          StreamBuilder<Map<String, int>>(
-            stream: _recentCounts(uid),
-            builder: (context, snap) {
-              final counts = snap.data ?? const <String, int>{};
-
-              return _ModuleMenu(
-                modules: modules,
-                titleOf: _titleOf,
-                counts: counts,
-                onTap: (moduleKey) => _openModuleList(
-                  moduleKey: moduleKey,
-                  groupTitle: 'Son Baktıklarım',
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 18),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              icon: const Icon(Icons.logout),
-              label: const Text('Çıkış Yap'),
-              onPressed: _logout,
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red,
-                foregroundColor: Colors.white,
+                  return _ModuleMenu(
+                    modules: modules,
+                    titleOf: _titleOf,
+                    counts: counts,
+                    onTap: (moduleKey) => _openModuleList(
+                      moduleKey: moduleKey,
+                      groupTitle: 'İlanlarım',
+                    ),
+                  );
+                },
               ),
-              icon: const Icon(Icons.delete_forever),
-              label: const Text('Hesabımı Sil'),
-              onPressed: _deleteAccount,
-            ),
+              const SizedBox(height: 14),
+              const _SectionTitle(title: 'Favoriler', icon: Icons.star_border),
+              StreamBuilder<Map<String, int>>(
+                stream: _favCounts(uid),
+                builder: (context, snap) {
+                  final counts = snap.data ?? const <String, int>{};
+
+                  return _ModuleMenu(
+                    modules: modules,
+                    titleOf: _titleOf,
+                    counts: counts,
+                    onTap: (moduleKey) => _openModuleList(
+                      moduleKey: moduleKey,
+                      groupTitle: 'Favoriler',
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 14),
+              const _SectionTitle(title: 'Son Baktıklarım', icon: Icons.history),
+              StreamBuilder<Map<String, int>>(
+                stream: _recentCounts(uid),
+                builder: (context, snap) {
+                  final counts = snap.data ?? const <String, int>{};
+
+                  return _ModuleMenu(
+                    modules: modules,
+                    titleOf: _titleOf,
+                    counts: counts,
+                    onTap: (moduleKey) => _openModuleList(
+                      moduleKey: moduleKey,
+                      groupTitle: 'Son Baktıklarım',
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: 18),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Çıkış Yap'),
+                  onPressed: _logout,
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                  ),
+                  icon: const Icon(Icons.delete_forever),
+                  label: const Text('Hesabımı Sil'),
+                  onPressed: _deleteAccount,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }

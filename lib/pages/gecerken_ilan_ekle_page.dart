@@ -139,6 +139,7 @@ class _GecerkenIlanEklePageState extends State<GecerkenIlanEklePage> {
 
   void _snack(String msg) {
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg)),
     );
@@ -184,22 +185,30 @@ class _GecerkenIlanEklePageState extends State<GecerkenIlanEklePage> {
       final photoUrls = await _imageService.uploadMultiple(_pickedFiles);
 
       final ref = _dbRef.push();
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final id = ref.key ?? '';
 
       final ilan = GecerkenModel(
-        id: ref.key ?? '',
+        id: id,
+        ownerId: user.uid,
         title: title,
         role: selectedRole!,
         city: selectedCity!,
         fromWhere: from,
         toWhere: to,
         note: note,
-        createdAt: DateTime.now().millisecondsSinceEpoch,
+        createdAt: now,
         photoUrls: photoUrls,
       );
 
       final data = ilan.toMap();
+
+      data['id'] = id;
       data['ownerId'] = user.uid;
+      data['userId'] = user.uid;
+      data['createdBy'] = user.uid;
       data['status'] = 'active';
+      data['createdAt'] = now;
 
       await ref.set(data);
 
@@ -247,7 +256,7 @@ class _GecerkenIlanEklePageState extends State<GecerkenIlanEklePage> {
                   .map((r) => DropdownMenuItem(value: r, child: Text(r)))
                   .toList(),
               onChanged:
-                  _saving ? null : (v) => setState(() => selectedRole = v),
+              _saving ? null : (v) => setState(() => selectedRole = v),
             ),
             const SizedBox(height: 10),
             DropdownButtonFormField<String>(
@@ -257,7 +266,7 @@ class _GecerkenIlanEklePageState extends State<GecerkenIlanEklePage> {
                   .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                   .toList(),
               onChanged:
-                  _saving ? null : (v) => setState(() => selectedCity = v),
+              _saving ? null : (v) => setState(() => selectedCity = v),
             ),
             const SizedBox(height: 10),
             TextField(
@@ -284,7 +293,7 @@ class _GecerkenIlanEklePageState extends State<GecerkenIlanEklePage> {
                 ElevatedButton.icon(
                   onPressed: _saving ? null : _pickMultiImages,
                   icon: const Icon(Icons.photo_library),
-                  label: const Text('Foto Seç (Çoklu)'),
+                  label: const Text('Foto Seç'),
                 ),
                 const SizedBox(width: 12),
                 Text('${_pickedFiles.length} foto'),
@@ -297,10 +306,10 @@ class _GecerkenIlanEklePageState extends State<GecerkenIlanEklePage> {
                 onPressed: _saving ? null : _save,
                 child: _saving
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
                     : const Text('Kaydet'),
               ),
             ),

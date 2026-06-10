@@ -39,7 +39,7 @@ class _OnlinePublicRoomsPageState extends State<OnlinePublicRoomsPage> {
           final rooms = <Map<String, dynamic>>[];
           data.forEach((key, value) {
             if (value is Map) {
-              final m = Map<String, dynamic>.from(value as Map);
+              final m = Map<String, dynamic>.from(value);
               final status = (m['status'] ?? '').toString();
               if (status == 'lobby') {
                 rooms.add(m);

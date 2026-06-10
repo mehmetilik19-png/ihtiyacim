@@ -66,7 +66,7 @@ class _DailySpinPageState extends State<DailySpinPage> with SingleTickerProvider
     _ctrl.reset();
     await _ctrl.forward();
 
-    final won = prizes[targetIndex].coins;
+
     // kayıt + coin ekle
     final applied = await repo.spin();
 

@@ -15,7 +15,7 @@ class EngelsizIsIlanEklePage extends StatefulWidget {
 
 class _EngelsizIsIlanEklePageState extends State<EngelsizIsIlanEklePage> {
   final DatabaseReference _ref =
-      FirebaseDatabase.instance.ref('engelsiz_is/listings');
+  FirebaseDatabase.instance.ref('engelsiz_is/items');
 
   String selectedType = 'isci_arayan';
 
@@ -122,7 +122,16 @@ class _EngelsizIsIlanEklePageState extends State<EngelsizIsIlanEklePage> {
         status: 'active',
       );
 
-      await pushRef.set(ilan.toMap());
+      final data = ilan.toMap();
+
+      data['id'] = pushRef.key ?? '';
+      data['ownerId'] = user.uid;
+      data['userId'] = user.uid;
+      data['createdBy'] = user.uid;
+      data['status'] = 'active';
+      data['createdAt'] = now;
+
+      await pushRef.set(data);
 
       _snack('İlan eklendi ✅');
 
@@ -137,9 +146,7 @@ class _EngelsizIsIlanEklePageState extends State<EngelsizIsIlanEklePage> {
 
   @override
   Widget build(BuildContext context) {
-    final cats = EngelsizIsCatalog.categories
-        .where((e) => e != 'Tümü')
-        .toList();
+    final cats = EngelsizIsCatalog.categories.where((e) => e != 'Tümü').toList();
     final cities = EngelsizIsCatalog.cities;
 
     return Scaffold(
@@ -172,6 +179,7 @@ class _EngelsizIsIlanEklePageState extends State<EngelsizIsIlanEklePage> {
             const SizedBox(height: 12),
             TextField(
               controller: _titleC,
+              enabled: !_saving,
               decoration: const InputDecoration(
                 labelText: 'Başlık / Pozisyon',
                 border: OutlineInputBorder(),
@@ -187,9 +195,8 @@ class _EngelsizIsIlanEklePageState extends State<EngelsizIsIlanEklePage> {
               items: cats
                   .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                   .toList(),
-              onChanged: _saving
-                  ? null
-                  : (v) => setState(() => selectedCategory = v),
+              onChanged:
+              _saving ? null : (v) => setState(() => selectedCategory = v),
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
@@ -202,11 +209,12 @@ class _EngelsizIsIlanEklePageState extends State<EngelsizIsIlanEklePage> {
                   .map((c) => DropdownMenuItem(value: c, child: Text(c)))
                   .toList(),
               onChanged:
-                  _saving ? null : (v) => setState(() => selectedCity = v),
+              _saving ? null : (v) => setState(() => selectedCity = v),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _descC,
+              enabled: !_saving,
               maxLines: 4,
               decoration: const InputDecoration(
                 labelText: 'Açıklama',
@@ -216,6 +224,7 @@ class _EngelsizIsIlanEklePageState extends State<EngelsizIsIlanEklePage> {
             const SizedBox(height: 12),
             TextField(
               controller: _contactNameC,
+              enabled: !_saving,
               decoration: const InputDecoration(
                 labelText: 'İletişim Adı',
                 border: OutlineInputBorder(),
@@ -224,6 +233,7 @@ class _EngelsizIsIlanEklePageState extends State<EngelsizIsIlanEklePage> {
             const SizedBox(height: 12),
             TextField(
               controller: _phoneC,
+              enabled: !_saving,
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(
                 labelText: 'Telefon',
@@ -233,6 +243,7 @@ class _EngelsizIsIlanEklePageState extends State<EngelsizIsIlanEklePage> {
             const SizedBox(height: 12),
             TextField(
               controller: _whatsC,
+              enabled: !_saving,
               keyboardType: TextInputType.phone,
               decoration: const InputDecoration(
                 labelText: 'WhatsApp (opsiyon)',
@@ -246,10 +257,10 @@ class _EngelsizIsIlanEklePageState extends State<EngelsizIsIlanEklePage> {
                 onPressed: _saving ? null : _save,
                 child: _saving
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
                     : const Text('Kaydet'),
               ),
             ),

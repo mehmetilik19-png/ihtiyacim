@@ -124,7 +124,7 @@ class StatsService {
   /// Not: Bu küçük kullanıcı sayılarında çok iyi çalışır.
   Future<int> getMyRank() async {
     final uid = _uidOrThrow();
-    final myBest = await getMyBestCorrect();
+
 
     // bestCorrect'e göre sırala (query ile tümünü çekmek zor olabilir),
     // basit: tamamını alıp localde sırala.

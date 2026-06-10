@@ -60,7 +60,7 @@ class _ProfileItemsPageState extends State<ProfileItemsPage> {
   Future<Map<String, dynamic>?> _fetchItem(String id) async {
     final snap = await _db.child('$_dataPath/$id').get();
     final v = snap.value;
-    if (v is Map) return Map<String, dynamic>.from(v as Map);
+    if (v is Map) return Map<String, dynamic>.from(v);
     return null;
   }
 

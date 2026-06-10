@@ -39,7 +39,6 @@ class _NobetciEczanePageState extends State<NobetciEczanePage> {
 
   // 18:00 - 08:00 kontrolü (istersen kaldırabilirsin)
   bool _allowedTime() {
-    final h = DateTime.now().hour;
     return true;
   }
 

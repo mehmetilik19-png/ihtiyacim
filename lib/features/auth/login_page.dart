@@ -44,11 +44,16 @@ class _LoginPageState extends State<LoginPage> {
       );
 
       if (!mounted) return;
-      Navigator.of(context).pop();
+
+      Navigator.of(context).pop(true);
     } on FirebaseAuthException catch (e) {
-      setState(() => error = _trError(e.code));
+      if (mounted) {
+        setState(() => error = _trError(e.code));
+      }
     } catch (_) {
-      setState(() => error = 'Bir hata oluştu.');
+      if (mounted) {
+        setState(() => error = 'Bir hata oluştu.');
+      }
     } finally {
       if (mounted) setState(() => loading = false);
     }
@@ -92,6 +97,7 @@ class _LoginPageState extends State<LoginPage> {
 
           TextField(
             controller: emailC,
+            enabled: !loading,
             keyboardType: TextInputType.emailAddress,
             decoration: const InputDecoration(
               labelText: 'E-posta',
@@ -104,6 +110,7 @@ class _LoginPageState extends State<LoginPage> {
 
           TextField(
             controller: passC,
+            enabled: !loading,
             obscureText: true,
             decoration: const InputDecoration(
               labelText: 'Şifre',
@@ -119,10 +126,10 @@ class _LoginPageState extends State<LoginPage> {
               onPressed: loading ? null : _login,
               child: loading
                   ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
                   : const Text('Giriş Yap'),
             ),
           ),
@@ -132,14 +139,18 @@ class _LoginPageState extends State<LoginPage> {
           TextButton(
             onPressed: loading
                 ? null
-                : () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const RegisterPage(),
-                      ),
-                    );
-                  },
+                : () async {
+              final ok = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const RegisterPage(),
+                ),
+              );
+
+              if (ok == true && mounted) {
+                Navigator.of(context).pop(true);
+              }
+            },
             child: const Text('Hesabın yok mu? Kayıt Ol'),
           ),
         ],

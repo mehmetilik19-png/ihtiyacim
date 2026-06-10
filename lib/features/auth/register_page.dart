@@ -14,6 +14,7 @@ class _RegisterPageState extends State<RegisterPage> {
   final pass2C = TextEditingController();
 
   bool loading = false;
+  bool acceptedTerms = false;
   String? error;
 
   @override
@@ -30,6 +31,11 @@ class _RegisterPageState extends State<RegisterPage> {
     final email = emailC.text.trim();
     final password = passC.text.trim();
     final password2 = pass2C.text.trim();
+
+    if (!acceptedTerms) {
+      setState(() => error = 'Devam etmek için kullanım şartlarını kabul etmelisin.');
+      return;
+    }
 
     if (email.isEmpty) {
       setState(() => error = 'E-posta boş olamaz.');
@@ -84,6 +90,30 @@ class _RegisterPageState extends State<RegisterPage> {
     }
   }
 
+  void _showTerms() {
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Kullanım Şartları'),
+        content: const SingleChildScrollView(
+          child: Text(
+            'Bu uygulamada kullanıcılar ilan ve içerik paylaşabilir.\n\n'
+                'Uygulamada hakaret, tehdit, ayrımcılık, şiddet, yasa dışı ürün, uygunsuz fotoğraf, dolandırıcılık veya rahatsız edici içerik paylaşmak yasaktır.\n\n'
+                'Kullanıcılar uygunsuz içerikleri şikayet edebilir ve rahatsız edici kullanıcıları engelleyebilir.\n\n'
+                'Şikayet edilen içerikler incelenir; kurallara aykırı içerikler kaldırılır ve gerekli durumlarda kullanıcı hesabı kısıtlanabilir.\n\n'
+                'Hesap oluşturarak bu kuralları kabul etmiş olursun.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Kapat'),
+          ),
+        ],
+      ),
+    );
+  }
+
   String _trError(String code) {
     switch (code) {
       case 'email-already-in-use':
@@ -118,10 +148,7 @@ class _RegisterPageState extends State<RegisterPage> {
           const Text(
             'E-postanı yaz, uygulama için yeni bir şifre belirle.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 14),
           if (error != null)
@@ -165,6 +192,24 @@ class _RegisterPageState extends State<RegisterPage> {
               border: OutlineInputBorder(),
             ),
           ),
+          const SizedBox(height: 12),
+          CheckboxListTile(
+            value: acceptedTerms,
+            onChanged: loading
+                ? null
+                : (v) {
+              setState(() => acceptedTerms = v ?? false);
+            },
+            controlAffinity: ListTileControlAffinity.leading,
+            title: const Text(
+              'Kullanım şartlarını kabul ediyorum.',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            subtitle: TextButton(
+              onPressed: _showTerms,
+              child: const Text('Kullanım şartlarını oku'),
+            ),
+          ),
           const SizedBox(height: 16),
           SizedBox(
             width: double.infinity,
@@ -172,10 +217,10 @@ class _RegisterPageState extends State<RegisterPage> {
               onPressed: loading ? null : _register,
               child: loading
                   ? const SizedBox(
-                      height: 18,
-                      width: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
+                height: 18,
+                width: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
                   : const Text('Hesap Oluştur'),
             ),
           ),

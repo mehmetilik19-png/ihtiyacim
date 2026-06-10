@@ -17,12 +17,17 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
 
   String type = 'duyuru';
   String display = 'slider';
-  String effect = 'konfeti';
+  String effect = 'softFade';
   String popupStyle = 'gift';
   String priority = 'normal';
   String frequency = 'once';
   String actionType = 'none';
   String pageTarget = 'market';
+
+  bool sendNotification = false;
+  bool showInApp = true;
+  String closeDelay = '0';
+  String durationType = 'always';
 
   final ref = FirebaseFirestore.instance.collection('admin_ads');
 
@@ -46,6 +51,24 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
     }
   }
 
+  int _expireAtByDuration(String d) {
+    final now = DateTime.now();
+
+    switch (d) {
+      case 'today':
+        return DateTime(now.year, now.month, now.day, 23, 59, 59)
+            .millisecondsSinceEpoch;
+      case '3days':
+        return now.add(const Duration(days: 3)).millisecondsSinceEpoch;
+      case '7days':
+        return now.add(const Duration(days: 7)).millisecondsSinceEpoch;
+      case '30days':
+        return now.add(const Duration(days: 30)).millisecondsSinceEpoch;
+      default:
+        return 0;
+    }
+  }
+
   Future<void> _save() async {
     final title = titleC.text.trim();
     final desc = descC.text.trim();
@@ -55,6 +78,17 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
     if (title.isEmpty || desc.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Başlık ve açıklama zorunlu')),
+      );
+      return;
+    }
+
+    if (!showInApp && !sendNotification) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'En az bir seçenek seç: uygulamada göster veya bildirim gönder',
+          ),
+        ),
       );
       return;
     }
@@ -72,6 +106,12 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
       'actionType': actionType,
       'pageTarget': pageTarget,
       'targetValue': targetValue,
+      'sendNotification': sendNotification,
+      'notificationSent': false,
+      'showInApp': showInApp,
+      'closeDelaySeconds': int.tryParse(closeDelay) ?? 0,
+      'durationType': durationType,
+      'expireAt': _expireAtByDuration(durationType),
       'active': true,
       'createdAt': DateTime.now().millisecondsSinceEpoch,
     });
@@ -80,6 +120,14 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
     descC.clear();
     buttonC.clear();
     targetC.clear();
+
+    setState(() {
+      sendNotification = false;
+      showInApp = true;
+      closeDelay = '0';
+      durationType = 'always';
+      effect = 'softFade';
+    });
 
     if (!mounted) return;
 
@@ -204,6 +252,21 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
     }
   }
 
+  String _durationName(String d) {
+    switch (d) {
+      case 'today':
+        return 'Bugün bitsin';
+      case '3days':
+        return '3 gün';
+      case '7days':
+        return '7 gün';
+      case '30days':
+        return '30 gün';
+      default:
+        return 'Süresiz';
+    }
+  }
+
   bool get _needsButton => actionType != 'none';
 
   bool get _needsTarget =>
@@ -235,7 +298,6 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-
                 TextField(
                   controller: descC,
                   maxLines: 4,
@@ -245,7 +307,6 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
                   ),
                 ),
                 const SizedBox(height: 12),
-
                 DropdownButtonFormField<String>(
                   value: type,
                   decoration: const InputDecoration(
@@ -264,7 +325,6 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
                   },
                 ),
                 const SizedBox(height: 12),
-
                 DropdownButtonFormField<String>(
                   value: display,
                   decoration: const InputDecoration(
@@ -281,28 +341,81 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
                   },
                 ),
                 const SizedBox(height: 12),
-
+                SwitchListTile(
+                  value: showInApp,
+                  title: const Text('Uygulama içinde göster'),
+                  subtitle: const Text('Slider, popup veya küçük reklam olarak görünür'),
+                  onChanged: (v) {
+                    setState(() => showInApp = v);
+                  },
+                ),
+                SwitchListTile(
+                  value: sendNotification,
+                  title: const Text('Bildirim olarak herkese gönder'),
+                  subtitle: const Text('Telefon bildirimi de gitsin'),
+                  onChanged: (v) {
+                    setState(() => sendNotification = v);
+                  },
+                ),
+                const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: effect,
+                  value: closeDelay,
                   decoration: const InputDecoration(
-                    labelText: 'Efekt',
+                    labelText: 'Kapat Butonu Ne Zaman Çıksın?',
                     border: OutlineInputBorder(),
                   ),
                   items: const [
-                    DropdownMenuItem(value: 'konfeti', child: Text('Konfeti')),
-                    DropdownMenuItem(value: 'parlama', child: Text('Parlama')),
-                    DropdownMenuItem(value: 'neon', child: Text('Neon')),
-                    DropdownMenuItem(value: 'pulse', child: Text('Nefes Efekti')),
-                    DropdownMenuItem(value: 'shake', child: Text('Sallanma')),
-                    DropdownMenuItem(value: 'uyari', child: Text('Uyarı')),
-                    DropdownMenuItem(value: 'normal', child: Text('Normal')),
+                    DropdownMenuItem(value: '0', child: Text('Hemen çıksın')),
+                    DropdownMenuItem(value: '3', child: Text('3 saniye sonra')),
+                    DropdownMenuItem(value: '5', child: Text('5 saniye sonra')),
+                    DropdownMenuItem(value: '10', child: Text('10 saniye sonra')),
+                    DropdownMenuItem(value: '15', child: Text('15 saniye sonra')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) setState(() => closeDelay = v);
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: durationType,
+                  decoration: const InputDecoration(
+                    labelText: 'Yayında Kalma Süresi',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'always', child: Text('Süresiz')),
+                    DropdownMenuItem(value: 'today', child: Text('Sadece bugün')),
+                    DropdownMenuItem(value: '3days', child: Text('3 gün')),
+                    DropdownMenuItem(value: '7days', child: Text('7 gün')),
+                    DropdownMenuItem(value: '30days', child: Text('30 gün')),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) setState(() => durationType = v);
+                  },
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: effect,
+                  decoration: const InputDecoration(
+                    labelText: 'Animasyon Tarzı',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'softFade', child: Text('Yumuşak geçiş')),
+                    DropdownMenuItem(value: 'slideUp', child: Text('Aşağıdan kayarak')),
+                    DropdownMenuItem(value: 'premiumGlow', child: Text('Premium vurgu')),
+                    DropdownMenuItem(value: 'minimal', child: Text('Minimal profesyonel')),
+                    DropdownMenuItem(value: 'glass', child: Text('Cam efekti')),
+                    DropdownMenuItem(value: 'ios', child: Text('iOS tarzı')),
+                    DropdownMenuItem(value: 'modernCard', child: Text('Modern kart')),
+                    DropdownMenuItem(value: 'urgentPulse', child: Text('Acil vurgu')),
+                    DropdownMenuItem(value: 'none', child: Text('Efektsiz')),
                   ],
                   onChanged: (v) {
                     if (v != null) setState(() => effect = v);
                   },
                 ),
                 const SizedBox(height: 12),
-
                 DropdownButtonFormField<String>(
                   value: popupStyle,
                   decoration: const InputDecoration(
@@ -322,7 +435,6 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
                   },
                 ),
                 const SizedBox(height: 12),
-
                 DropdownButtonFormField<String>(
                   value: frequency,
                   decoration: const InputDecoration(
@@ -342,7 +454,6 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
                   },
                 ),
                 const SizedBox(height: 12),
-
                 DropdownButtonFormField<String>(
                   value: priority,
                   decoration: const InputDecoration(
@@ -359,7 +470,6 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
                   },
                 ),
                 const SizedBox(height: 12),
-
                 DropdownButtonFormField<String>(
                   value: actionType,
                   decoration: const InputDecoration(
@@ -377,7 +487,6 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
                     if (v != null) setState(() => actionType = v);
                   },
                 ),
-
                 if (_needsButton) ...[
                   const SizedBox(height: 12),
                   TextField(
@@ -389,7 +498,6 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
                     ),
                   ),
                 ],
-
                 if (actionType == 'page') ...[
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -411,7 +519,6 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
                     },
                   ),
                 ],
-
                 if (_needsTarget) ...[
                   const SizedBox(height: 12),
                   TextField(
@@ -432,9 +539,7 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
                     ),
                   ),
                 ],
-
                 const SizedBox(height: 14),
-
                 SizedBox(
                   width: double.infinity,
                   height: 48,
@@ -450,9 +555,7 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
               ],
             ),
           ),
-
           const SizedBox(height: 14),
-
           StreamBuilder<QuerySnapshot>(
             stream: ref.orderBy('createdAt', descending: true).snapshots(),
             builder: (context, snap) {
@@ -505,6 +608,11 @@ class _AdminDuyuruReklamPageState extends State<AdminDuyuruReklamPage> {
                             'none')
                             .toString(),
                       ),
+                      durationName: _durationName(
+                        ((d.data() as Map<String, dynamic>)['durationType'] ??
+                            'always')
+                            .toString(),
+                      ),
                       onToggle: () => _toggle(
                         d.id,
                         ((d.data() as Map<String, dynamic>)['active'] == true),
@@ -530,6 +638,7 @@ class _AdminAdCard extends StatelessWidget {
   final String displayName;
   final String frequencyName;
   final String actionName;
+  final String durationName;
   final VoidCallback onToggle;
   final VoidCallback onDelete;
 
@@ -542,6 +651,7 @@ class _AdminAdCard extends StatelessWidget {
     required this.displayName,
     required this.frequencyName,
     required this.actionName,
+    required this.durationName,
     required this.onToggle,
     required this.onDelete,
   });
@@ -551,6 +661,9 @@ class _AdminAdCard extends StatelessWidget {
     final active = data['active'] == true;
     final title = (data['title'] ?? '').toString();
     final desc = (data['desc'] ?? '').toString();
+    final sendNotification = data['sendNotification'] == true;
+    final showInApp = data['showInApp'] != false;
+    final closeDelaySeconds = data['closeDelaySeconds'] ?? 0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -610,6 +723,23 @@ class _AdminAdCard extends StatelessWidget {
               _MiniTag(text: displayName, color: const Color(0xFF246BFF)),
               _MiniTag(text: frequencyName, color: const Color(0xFF607D8B)),
               _MiniTag(text: actionName, color: const Color(0xFF7A4DFF)),
+              _MiniTag(text: durationName, color: const Color(0xFF009688)),
+              _MiniTag(
+                text: sendNotification ? 'Bildirim gider' : 'Bildirim yok',
+                color: sendNotification
+                    ? const Color(0xFFD32F2F)
+                    : const Color(0xFF607D8B),
+              ),
+              _MiniTag(
+                text: showInApp ? 'Uygulamada görünür' : 'Uygulamada yok',
+                color: showInApp
+                    ? const Color(0xFF14C76F)
+                    : const Color(0xFF607D8B),
+              ),
+              _MiniTag(
+                text: 'Kapat: $closeDelaySeconds sn',
+                color: const Color(0xFFFF9800),
+              ),
             ],
           ),
           const SizedBox(height: 12),

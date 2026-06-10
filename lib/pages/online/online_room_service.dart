@@ -22,37 +22,36 @@ class OnlineRoomService {
 
   String _code6() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    final r = Random();
+    final r = Random.secure();
     return List.generate(6, (_) => chars[r.nextInt(chars.length)]).join();
   }
 
-  /// Oda oluştur (2 veya 4)
-  Future<String> createRoom({required int maxPlayers}) async {
-    if (maxPlayers != 2 && maxPlayers != 4) {
-      throw Exception('maxPlayers sadece 2 veya 4 olabilir.');
-    }
+  Future<String> createRoom({int maxPlayers = 4}) async {
+    if (maxPlayers < 2) maxPlayers = 2;
+    if (maxPlayers > 8) maxPlayers = 8;
 
     final uid = _uid();
     final name = _name();
+    final now = DateTime.now().millisecondsSinceEpoch;
 
-    // benzersiz code bul
     String code = _code6();
-    for (int i = 0; i < 6; i++) {
+
+    for (int i = 0; i < 10; i++) {
       final snap = await roomRef(code).get();
       if (!snap.exists) break;
       code = _code6();
     }
 
-    final seed = DateTime.now().millisecondsSinceEpoch;
-    final now = DateTime.now().millisecondsSinceEpoch;
-
     await roomRef(code).set({
       'code': code,
       'hostUid': uid,
       'maxPlayers': maxPlayers,
-      'status': 'lobby', // lobby | playing | finished
-      'seed': seed,
+      'status': 'lobby',
+      'seed': now,
       'pos': 0,
+      'questionStartedAt': 0,
+      'currentWinnerUid': '',
+      'currentWinnerName': '',
       'createdAt': now,
       'players': {
         uid: {
@@ -62,6 +61,7 @@ class OnlineRoomService {
           'joinedAt': now,
           'answeredPos': -1,
           'lastAnswer': -1,
+          'isReady': true,
         }
       },
     });
@@ -69,170 +69,247 @@ class OnlineRoomService {
     return code;
   }
 
-  /// Odaya katıl
-  Future<void> joinRoom(String code) async {
+  Future<void> joinRoom(String rawCode) async {
+    final code = rawCode.trim().toUpperCase();
     final uid = _uid();
     final name = _name();
     final now = DateTime.now().millisecondsSinceEpoch;
 
-    final ref = roomRef(code);
-
-    await ref.runTransaction((val) {
+    await roomRef(code).runTransaction((val) {
       if (val == null) return Transaction.abort();
 
-      final m = Map<dynamic, dynamic>.from(val as Map);
-      final status = (m['status'] ?? 'lobby').toString();
-      final maxPlayers = (m['maxPlayers'] as int?) ?? 2;
+      final room = Map<dynamic, dynamic>.from(val as Map);
+      final status = (room['status'] ?? 'lobby').toString();
+      final maxPlayers = (room['maxPlayers'] as int?) ?? 4;
 
       if (status != 'lobby') return Transaction.abort();
 
-      final players = (m['players'] is Map)
-          ? Map<dynamic, dynamic>.from(m['players'] as Map)
+      final players = (room['players'] is Map)
+          ? Map<dynamic, dynamic>.from(room['players'] as Map)
           : <dynamic, dynamic>{};
 
       if (!players.containsKey(uid) && players.length >= maxPlayers) {
         return Transaction.abort();
       }
 
-      final existing = (players[uid] is Map)
+      final old = (players[uid] is Map)
           ? Map<dynamic, dynamic>.from(players[uid] as Map)
           : <dynamic, dynamic>{};
 
       players[uid] = {
         'uid': uid,
         'name': name,
-        'score': (existing['score'] as int?) ?? 0,
-        'joinedAt': (existing['joinedAt'] as int?) ?? now,
-        'answeredPos': (existing['answeredPos'] as int?) ?? -1,
-        'lastAnswer': (existing['lastAnswer'] as int?) ?? -1,
+        'score': (old['score'] as int?) ?? 0,
+        'joinedAt': (old['joinedAt'] as int?) ?? now,
+        'answeredPos': -1,
+        'lastAnswer': -1,
+        'isReady': true,
       };
 
-      m['players'] = players;
-      return Transaction.success(m);
+      room['players'] = players;
+      return Transaction.success(room);
     });
   }
 
-  Future<void> leaveRoom(String code) async {
+  Future<void> leaveRoom(String rawCode) async {
+    final code = rawCode.trim().toUpperCase();
     final uid = _uid();
     final ref = roomRef(code);
 
     final snap = await ref.get();
     if (!snap.exists) return;
 
-    final m = Map<dynamic, dynamic>.from(snap.value as Map);
-    final hostUid = (m['hostUid'] ?? '').toString();
+    final room = Map<dynamic, dynamic>.from(snap.value as Map);
+    final hostUid = (room['hostUid'] ?? '').toString();
 
-    await ref.child('players/$uid').remove();
-    await ref.child('answers/$uid').remove();
-
-    // host çıkarsa oda biter (basit)
     if (hostUid == uid) {
       await ref.update({'status': 'finished'});
+      return;
     }
+
+    await ref.child('players/$uid').remove();
   }
 
-  /// Host oyunu başlatır
-  Future<void> startGame(String code) async {
+  Future<void> startGame(String rawCode) async {
+    final code = rawCode.trim().toUpperCase();
     final uid = _uid();
     final ref = roomRef(code);
+
     final snap = await ref.get();
     if (!snap.exists) throw Exception('Oda yok');
 
-    final m = Map<dynamic, dynamic>.from(snap.value as Map);
-    final hostUid = (m['hostUid'] ?? '').toString();
-    if (hostUid != uid) throw Exception('Sadece host başlatabilir');
+    final room = Map<dynamic, dynamic>.from(snap.value as Map);
+    final hostUid = (room['hostUid'] ?? '').toString();
+
+    if (hostUid != uid) {
+      throw Exception('Sadece oda sahibi başlatabilir');
+    }
+
+    final players = (room['players'] is Map)
+        ? Map<dynamic, dynamic>.from(room['players'] as Map)
+        : <dynamic, dynamic>{};
+
+    if (players.length < 2) {
+      throw Exception('Oyunu başlatmak için en az 2 oyuncu gerekli');
+    }
+
+    final now = DateTime.now().millisecondsSinceEpoch;
 
     await ref.update({
       'status': 'playing',
       'pos': 0,
-      'startedAt': DateTime.now().millisecondsSinceEpoch,
+      'startedAt': now,
+      'questionStartedAt': now,
+      'currentWinnerUid': '',
+      'currentWinnerName': '',
     });
 
-    // cevapları temizle
     await ref.child('answers').remove();
 
-    // oyuncu answeredPos sıfırla
-    final players = (m['players'] is Map)
-        ? Map<dynamic, dynamic>.from(m['players'] as Map)
-        : <dynamic, dynamic>{};
-
     for (final k in players.keys) {
+      await ref.child('players/$k/score').set(0);
       await ref.child('players/$k/answeredPos').set(-1);
       await ref.child('players/$k/lastAnswer').set(-1);
     }
   }
 
-  /// Oyuncu cevap gönderir (pos için 1 kere)
-  Future<void> submitAnswer({
+  Future<bool> submitAnswer({
     required String code,
     required int pos,
     required int selectedIndex,
+    required int correctIndex,
   }) async {
+    final roomCode = code.trim().toUpperCase();
     final uid = _uid();
-    final ref = roomRef(code);
+    final name = _name();
+    final ref = roomRef(roomCode);
 
     final playerAnswered = await ref.child('players/$uid/answeredPos').get();
     final already = (playerAnswered.value as int?) ?? -1;
-    if (already == pos) return;
+    if (already == pos) return false;
 
-    await ref.child('answers/$pos/$uid').set(selectedIndex);
     await ref.child('players/$uid/answeredPos').set(pos);
     await ref.child('players/$uid/lastAnswer').set(selectedIndex);
+    await ref.child('answers/$pos/$uid').set({
+      'uid': uid,
+      'name': name,
+      'selectedIndex': selectedIndex,
+      'isCorrect': selectedIndex == correctIndex,
+      'answeredAt': ServerValue.timestamp,
+    });
+
+    if (selectedIndex != correctIndex) return false;
+
+    bool isWinner = false;
+
+    await ref.runTransaction((val) {
+      if (val == null) return Transaction.abort();
+
+      final room = Map<dynamic, dynamic>.from(val as Map);
+      final status = (room['status'] ?? '').toString();
+      final currentPos = (room['pos'] as int?) ?? 0;
+      final currentWinnerUid = (room['currentWinnerUid'] ?? '').toString();
+
+      if (status != 'playing') return Transaction.abort();
+      if (currentPos != pos) return Transaction.abort();
+      if (currentWinnerUid.isNotEmpty) return Transaction.abort();
+
+      room['currentWinnerUid'] = uid;
+      room['currentWinnerName'] = name;
+
+      final players = (room['players'] is Map)
+          ? Map<dynamic, dynamic>.from(room['players'] as Map)
+          : <dynamic, dynamic>{};
+
+      final player = (players[uid] is Map)
+          ? Map<dynamic, dynamic>.from(players[uid] as Map)
+          : <dynamic, dynamic>{};
+
+      final score = (player['score'] as int?) ?? 0;
+      player['score'] = score + 1;
+      players[uid] = player;
+      room['players'] = players;
+
+      isWinner = true;
+      return Transaction.success(room);
+    });
+
+    return isWinner;
   }
 
-  /// Host: herkes cevapladı mı? ise skorları yazıp sonraki soruya geçir
-  Future<void> hostAdvanceIfReady({
+  Future<void> hostNextQuestion({
     required String code,
     required int pos,
-    required int correctIndex,
+    required int totalQuestions,
   }) async {
+    final roomCode = code.trim().toUpperCase();
+    final uid = _uid();
+    final ref = roomRef(roomCode);
+
+    final snap = await ref.get();
+    if (!snap.exists) return;
+
+    final room = Map<dynamic, dynamic>.from(snap.value as Map);
+    final hostUid = (room['hostUid'] ?? '').toString();
+    final currentPos = (room['pos'] as int?) ?? 0;
+
+    if (hostUid != uid) return;
+    if (currentPos != pos) return;
+
+    if (pos + 1 >= totalQuestions) {
+      await ref.update({
+        'status': 'finished',
+        'finishedAt': DateTime.now().millisecondsSinceEpoch,
+      });
+      return;
+    }
+
+    final players = (room['players'] is Map)
+        ? Map<dynamic, dynamic>.from(room['players'] as Map)
+        : <dynamic, dynamic>{};
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+
+    await ref.update({
+      'pos': pos + 1,
+      'questionStartedAt': now,
+      'currentWinnerUid': '',
+      'currentWinnerName': '',
+    });
+
+    for (final k in players.keys) {
+      await ref.child('players/$k/answeredPos').set(-1);
+      await ref.child('players/$k/lastAnswer').set(-1);
+    }
+
+    await ref.child('answers/$pos').remove();
+  }
+
+  Future<void> finishRoom(String rawCode) async {
+    final code = rawCode.trim().toUpperCase();
     final uid = _uid();
     final ref = roomRef(code);
 
     final snap = await ref.get();
     if (!snap.exists) return;
 
-    final m = Map<dynamic, dynamic>.from(snap.value as Map);
-    final hostUid = (m['hostUid'] ?? '').toString();
+    final room = Map<dynamic, dynamic>.from(snap.value as Map);
+    final hostUid = (room['hostUid'] ?? '').toString();
+
     if (hostUid != uid) return;
 
-    final status = (m['status'] ?? 'lobby').toString();
-    if (status != 'playing') return;
+    await ref.update({
+      'status': 'finished',
+      'finishedAt': DateTime.now().millisecondsSinceEpoch,
+    });
+  }
 
-    final players = (m['players'] is Map)
-        ? Map<dynamic, dynamic>.from(m['players'] as Map)
-        : <dynamic, dynamic>{};
-    final playerCount = players.length;
+  Stream<DatabaseEvent> watchRoom(String rawCode) {
+    final code = rawCode.trim().toUpperCase();
+    return roomRef(code).onValue;
+  }
 
-    final ansSnap = await ref.child('answers/$pos').get();
-    final answers = (ansSnap.value is Map)
-        ? Map<dynamic, dynamic>.from(ansSnap.value as Map)
-        : <dynamic, dynamic>{};
-
-    if (answers.length < playerCount) return;
-
-    // skor güncelle
-    for (final entry in answers.entries) {
-      final puid = entry.key.toString();
-      final pick = (entry.value as int?) ?? -1;
-      if (pick == correctIndex) {
-        await ref.child('players/$puid/score').runTransaction((v) {
-          final cur = (v as int?) ?? 0;
-          return Transaction.success(cur + 1);
-        });
-      }
-    }
-
-    // sonraki soru
-    await ref.child('pos').set(pos + 1);
-
-    // bu pos'un cevaplarını temizle
-    await ref.child('answers/$pos').remove();
-
-    // herkes tekrar basabilsin
-    for (final k in players.keys) {
-      await ref.child('players/$k/answeredPos').set(-1);
-      await ref.child('players/$k/lastAnswer').set(-1);
-    }
+  Stream<DatabaseEvent> watchRooms() {
+    return roomsRef().orderByChild('status').equalTo('lobby').onValue;
   }
 }

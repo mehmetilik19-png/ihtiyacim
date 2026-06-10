@@ -201,10 +201,10 @@ class _CanDostumIlanEklePageState extends State<CanDostumIlanEklePage> {
                 onPressed: _saving ? null : _saveIlan,
                 child: _saving
                     ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
                     : const Text('Kaydet'),
               ),
             ),

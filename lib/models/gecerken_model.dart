@@ -1,16 +1,18 @@
 class GecerkenModel {
   final String id;
-  final String title;        // Kısa başlık
-  final String role;         // Sürücü / Yolcu
-  final String city;         // 81 il
-  final String fromWhere;    // Nereden
-  final String toWhere;      // Nereye
-  final String note;         // Not / açıklama
+  final String ownerId;
+  final String title;
+  final String role;
+  final String city;
+  final String fromWhere;
+  final String toWhere;
+  final String note;
   final int createdAt;
   final List<String> photoUrls;
 
   GecerkenModel({
     required this.id,
+    this.ownerId = '',
     required this.title,
     required this.role,
     required this.city,
@@ -25,7 +27,7 @@ class GecerkenModel {
     final m = map ?? <dynamic, dynamic>{};
 
     final rawPhotos = m['photoUrls'];
-    final photos = (rawPhotos is List)
+    final photos = rawPhotos is List
         ? rawPhotos.map((e) => e.toString()).toList()
         : <String>[];
 
@@ -41,6 +43,7 @@ class GecerkenModel {
 
     return GecerkenModel(
       id: id,
+      ownerId: (m['ownerId'] ?? m['uid'] ?? m['userId'] ?? '').toString(),
       title: (m['title'] ?? '').toString(),
       role: (m['role'] ?? 'Yolcu').toString(),
       city: (m['city'] ?? '').toString(),
@@ -54,6 +57,7 @@ class GecerkenModel {
 
   Map<String, dynamic> toMap() {
     return {
+      'ownerId': ownerId,
       'title': title,
       'role': role,
       'city': city,

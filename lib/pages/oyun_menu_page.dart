@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:ihtiyacim/game/quiz_engine.dart';
 import 'package:ihtiyacim/game/quiz_progress_repo.dart' as quiz_progress_repo;
 import 'package:ihtiyacim/game/quiz_repo.dart';
+
 import 'oyun_page.dart';
+import 'package:ihtiyacim/pages/online/online_lobby_page.dart';
+import 'package:ihtiyacim/pages/online/online_public_rooms_page.dart';
 
 class OyunMenuPage extends StatefulWidget {
   const OyunMenuPage({super.key});
@@ -14,6 +17,16 @@ class OyunMenuPage extends StatefulWidget {
 class _OyunMenuPageState extends State<OyunMenuPage> {
   late final QuizEngine engine;
   bool _loading = true;
+
+  static const Color bgTop = Color(0xFF050B18);
+  static const Color bgMiddle = Color(0xFF071D35);
+  static const Color bgBottom = Color(0xFF082B4F);
+
+  static const Color neonBlue = Color(0xFF00D4FF);
+  static const Color electricBlue = Color(0xFF2979FF);
+  static const Color purple = Color(0xFF8B5CFF);
+  static const Color orange = Color(0xFFFFB84D);
+  static const Color green = Color(0xFF35F2A2);
 
   @override
   void initState() {
@@ -44,10 +57,28 @@ class _OyunMenuPageState extends State<OyunMenuPage> {
     await _load();
   }
 
+  void _openOnlineLobby() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const OnlineLobbyPage(code: ''),
+      ),
+    );
+  }
+
+  void _openPublicRooms() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => OnlinePublicRoomsPage(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0B1020),
+      backgroundColor: bgTop,
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -56,87 +87,86 @@ class _OyunMenuPageState extends State<OyunMenuPage> {
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              Color(0xFF0B1020),
-              Color(0xFF121933),
-              Color(0xFF1A2242),
+              bgTop,
+              bgMiddle,
+              bgBottom,
             ],
           ),
         ),
         child: SafeArea(
           child: _loading
               ? const Center(
-            child: CircularProgressIndicator(
-              color: Color(0xFF5B6CFF),
-            ),
+            child: CircularProgressIndicator(color: neonBlue),
           )
               : SingleChildScrollView(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 18,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _buildTopBar(context),
-                const SizedBox(height: 24),
+                const SizedBox(height: 26),
                 const Text(
-                  'Oyun',
+                  'Oyun Merkezi',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 32,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 34,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Bilgine güveniyorsan başla.\n20 saniye, 4 can, 4 seçenek.',
+                  'Tek başına ilerle veya arkadaşlarınla aynı soruda kapış.',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.72),
+                    color: Colors.white.withOpacity(0.68),
                     fontSize: 15,
                     height: 1.5,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 24),
                 _buildLeagueCard(),
-                const SizedBox(height: 14),
-                _buildStatsRow(),
-                const SizedBox(height: 18),
-                _buildMainCard(),
-                const SizedBox(height: 14),
-                _buildInfoCard(
-                  icon: Icons.workspace_premium_rounded,
-                  title: 'Toplam Doğru',
-                  value: '${engine.seasonCorrect}',
-                  subtitle: 'Lig hesabı buna göre ilerler',
+                const SizedBox(height: 22),
+                _buildGameModeButton(
+                  icon: Icons.bolt_rounded,
+                  title: 'Tek Kişilik Oyna',
+                  subtitle: 'Lig puanı kas, rekorunu yükselt',
+                  color1: electricBlue,
+                  color2: neonBlue,
+                  onTap: _openGame,
                 ),
                 const SizedBox(height: 14),
-                _buildInfoCard(
-                  icon: Icons.emoji_events_rounded,
-                  title: 'Rekorun',
-                  value: '${engine.bestCorrect}',
-                  subtitle: 'En iyi turun burada görünür',
+                _buildGameModeButton(
+                  icon: Icons.add_rounded,
+                  title: 'Oda Oluştur',
+                  subtitle: 'Kod oluştur, arkadaşlarını davet et',
+                  color1: purple,
+                  color2: neonBlue,
+                  onTap: _openOnlineLobby,
                 ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 58,
-                  child: ElevatedButton(
-                    onPressed: _openGame,
-                    style: ElevatedButton.styleFrom(
-                      elevation: 0,
-                      backgroundColor: const Color(0xFF5B6CFF),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                    ),
-                    child: const Text(
-                      'Oyuna Başla',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
+                const SizedBox(height: 14),
+                _buildGameModeButton(
+                  icon: Icons.meeting_room_rounded,
+                  title: 'Odaya Katıl',
+                  subtitle: 'Kod gir ve aynı soruda yarış',
+                  color1: green,
+                  color2: neonBlue,
+                  onTap: _openOnlineLobby,
                 ),
+                const SizedBox(height: 14),
+                _buildGameModeButton(
+                  icon: Icons.public_rounded,
+                  title: 'Açık Odalar',
+                  subtitle: 'Herkese açık odalara hızlı katıl',
+                  color1: orange,
+                  color2: purple,
+                  onTap: _openPublicRooms,
+                ),
+                const SizedBox(height: 22),
+                _buildSimpleInfoCard(),
               ],
             ),
           ),
@@ -150,16 +180,23 @@ class _OyunMenuPageState extends State<OyunMenuPage> {
       children: [
         InkWell(
           onTap: () => Navigator.pop(context),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           child: Container(
-            width: 46,
-            height: 46,
+            width: 48,
+            height: 48,
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: Colors.white.withOpacity(0.08),
+                color: neonBlue.withOpacity(0.18),
               ),
+              boxShadow: [
+                BoxShadow(
+                  color: neonBlue.withOpacity(0.08),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
             child: const Icon(
               Icons.arrow_back_ios_new_rounded,
@@ -178,13 +215,27 @@ class _OyunMenuPageState extends State<OyunMenuPage> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        color: Colors.white.withOpacity(0.07),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(26),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withOpacity(0.12),
+            Colors.white.withOpacity(0.055),
+          ],
         ),
+        border: Border.all(
+          color: neonBlue.withOpacity(0.15),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: neonBlue.withOpacity(0.08),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -192,306 +243,203 @@ class _OyunMenuPageState extends State<OyunMenuPage> {
           Row(
             children: [
               Container(
-                padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                width: 58,
+                height: 58,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  color: engine.leagueColor.withOpacity(0.18),
-                ),
-                child: Text(
-                  engine.currentLeagueName,
-                  style: TextStyle(
-                    color: engine.leagueColor,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12,
+                  gradient: LinearGradient(
+                    colors: [
+                      engine.leagueColor.withOpacity(0.95),
+                      neonBlue.withOpacity(0.85),
+                    ],
                   ),
+                  borderRadius: BorderRadius.circular(19),
+                  boxShadow: [
+                    BoxShadow(
+                      color: engine.leagueColor.withOpacity(0.25),
+                      blurRadius: 18,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.emoji_events_rounded,
+                  color: Colors.white,
+                  size: 30,
                 ),
               ),
-              const Spacer(),
-              Text(
-                'Sıra ${engine.currentRank}/50',
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.80),
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
+              const SizedBox(width: 15),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      engine.currentLeagueName,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 21,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      '#${engine.currentRank}/50  •  ${engine.seasonCorrect} Doğru',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.66),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            'Toplam doğru: ${engine.seasonCorrect}',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.82),
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'İlk 10 kişi üst lige çıkar',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.64),
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 18),
           ClipRRect(
             borderRadius: BorderRadius.circular(999),
             child: LinearProgressIndicator(
               value: engine.leagueProgress,
-              minHeight: 8,
-              backgroundColor: Colors.white.withOpacity(0.08),
+              minHeight: 9,
+              backgroundColor: Colors.white.withOpacity(0.10),
               valueColor: AlwaysStoppedAnimation(engine.leagueColor),
             ),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 11),
           Text(
             needed <= 0
                 ? 'Üst lige çıkmaya hazırsın: $nextLeague'
-                : '$nextLeague için $needed soru daha gerekiyor',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatsRow() {
-    return Row(
-      children: [
-        Expanded(
-          child: _MiniStatCard(
-            title: 'Ligim',
-            value: engine.currentLeagueName,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _MiniStatCard(
-            title: 'Sıralamam',
-            value: '${engine.currentRank}/50',
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMainCard() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: Colors.white.withOpacity(0.08),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.10),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.25),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              gradient: const LinearGradient(
-                colors: [
-                  Color(0xFF5B6CFF),
-                  Color(0xFF4DD8FF),
-                ],
-              ),
-            ),
-            child: const Icon(
-              Icons.sports_esports_rounded,
-              color: Colors.white,
-              size: 28,
-            ),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Hazır mısın?',
+                : '$nextLeague için $needed doğru cevap daha gerekiyor',
             style: TextStyle(
-              color: Colors.white,
-              fontSize: 22,
+              color: Colors.white.withOpacity(0.86),
+              fontSize: 13,
               fontWeight: FontWeight.w800,
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Doğru cevap ver, serini büyüt ve ligde yüksel.',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.70),
-              fontSize: 14,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 18),
-          _buildRuleItem('Her soru için 20 saniyen var'),
-          _buildRuleItem('4 yanlışta tur biter'),
-          _buildRuleItem('5 doğru seride %50 jokeri kazanırsın'),
-          _buildRuleItem('Lig ilerlemen ana ekranda kalıcı görünür'),
         ],
       ),
     );
   }
 
-  Widget _buildRuleItem(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.only(top: 2),
-            child: Icon(
-              Icons.check_circle_rounded,
-              color: Color(0xFF4DD8FF),
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                color: Colors.white.withOpacity(0.82),
-                fontSize: 14,
-                height: 1.4,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoCard({
+  Widget _buildGameModeButton({
     required IconData icon,
     required String title,
-    required String value,
     required String subtitle,
+    required Color color1,
+    required Color color2,
+    required VoidCallback onTap,
   }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(24),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(24),
+          color: Colors.white.withOpacity(0.075),
+          border: Border.all(
+            color: color1.withOpacity(0.22),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: color1.withOpacity(0.12),
+              blurRadius: 22,
+              offset: const Offset(0, 10),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [color1, color2],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(19),
+                boxShadow: [
+                  BoxShadow(
+                    color: color1.withOpacity(0.32),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Icon(
+                icon,
+                color: Colors.white,
+                size: 31,
+              ),
+            ),
+            const SizedBox(width: 15),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.62),
+                      fontSize: 13,
+                      height: 1.35,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: Colors.white.withOpacity(0.52),
+              size: 18,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSimpleInfoCard() {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(24),
+        color: neonBlue.withOpacity(0.08),
         border: Border.all(
-          color: Colors.white.withOpacity(0.08),
+          color: neonBlue.withOpacity(0.18),
         ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 46,
-            height: 46,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
-              icon,
-              color: Colors.white,
-            ),
+          const Icon(
+            Icons.flash_on_rounded,
+            color: neonBlue,
+            size: 25,
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.68),
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.56),
-                    fontSize: 12,
-                    height: 1.3,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MiniStatCard extends StatelessWidget {
-  final String title;
-  final String value;
-
-  const _MiniStatCard({
-    required this.title,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: Colors.white.withOpacity(0.08),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.08),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.66),
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
+            child: Text(
+              'Online modda aynı soru herkese gelir. İlk doğru cevaplayan oyuncu puanı alır.',
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.78),
+                fontSize: 13,
+                height: 1.45,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],

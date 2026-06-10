@@ -41,11 +41,7 @@ class _MyListingsPageState extends State<MyListingsPage> {
     return widget.groupTitle.toLowerCase().contains('favor');
   }
 
-  bool get _isRecent {
-    final m = (widget.mode ?? '').toLowerCase();
-    if (m.isNotEmpty) return m == 'recent';
-    return widget.groupTitle.toLowerCase().contains('son');
-  }
+
 
   DatabaseReference get _itemsRef => _db.child(widget.itemsPath);
 

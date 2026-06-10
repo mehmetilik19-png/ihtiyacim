@@ -64,7 +64,7 @@ class UserActiveService {
           final mm = Map<dynamic, dynamic>.from(items);
           mm.forEach((id, data) {
             if (data is Map) {
-              final m = Map<String, dynamic>.from(data as Map);
+              final m = Map<String, dynamic>.from(data);
               m['module'] = mod.toString();
               m['itemId'] = id.toString();
               list.add(m);
@@ -117,7 +117,7 @@ class UserActiveService {
           final mm = Map<dynamic, dynamic>.from(items);
           mm.forEach((id, data) {
             if (data is Map) {
-              final m = Map<String, dynamic>.from(data as Map);
+              final m = Map<String, dynamic>.from(data);
               m['module'] = mod.toString();
               m['itemId'] = id.toString();
               list.add(m);
