@@ -18,7 +18,7 @@ workflows:
     scripts:
       - name: Set app version
         script: |
-          sed -i '' 's/^version:.*/version: 1.0.25+25/' pubspec.yaml
+          sed -i '' 's/^version:.*/version: 1.0.26+26/' pubspec.yaml
 
       - name: Set bundle id
         script: |
@@ -77,7 +77,7 @@ workflows:
           EOF
 
       - name: Build IPA
-        script: flutter build ipa --release --build-number=25 --build-name=1.0.25 --export-options-plist=ios/ExportOptions.plist
+        script: flutter build ipa --release --build-number=26 --build-name=1.0.26 --export-options-plist=ios/ExportOptions.plist
 
     artifacts:
       - build/ios/ipa/*.ipa
@@ -99,13 +99,13 @@ workflows:
     scripts:
       - name: Set app version
         script: |
-          sed -i 's/^version:.*/version: 1.0.25+25/' pubspec.yaml
+          sed -i 's/^version:.*/version: 1.0.26+26/' pubspec.yaml
 
       - name: Get dependencies
         script: flutter pub get
 
       - name: Build Android App Bundle
-        script: flutter build appbundle --release --build-number=25 --build-name=1.0.25
+        script: flutter build appbundle --release --build-number=26 --build-name=1.0.26
 
     artifacts:
       - build/app/outputs/bundle/release/app-release.aab
