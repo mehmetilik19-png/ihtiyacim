@@ -18,7 +18,7 @@ app.get("/version", (req, res) => {
   return res.json({ ok: true, version: BACKEND_VERSION });
 });
 
-app.post("/tarzimaicomment", async (req, res) => {
+app.post("/", async (req, res) => {
   const requestId = Math.random().toString(16).slice(2);
 
   try {
@@ -55,8 +55,7 @@ app.post("/tarzimaicomment", async (req, res) => {
       `Kullanıcı notu: ${prompt}\n` +
       `Modlar: friendMode=${!!options.friendMode}, addDipNote=${!!options.addDipNote}, edit=${!!options.edit}`;
 
-    const openaiResp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
+    const openaiResp = await fetch("https://api.openai.com/v1/chat/completions      method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${openaiKey}`,

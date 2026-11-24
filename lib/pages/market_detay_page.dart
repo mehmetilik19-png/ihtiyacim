@@ -3,161 +3,225 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'package:ihtiyacim/models/market_listing_model.dart';
-import 'package:ihtiyacim/features/market/services/market_cart.dart';
+import '../models/market_listing_model.dart';
+import '../pages/market_cart.dart';
+import '../services/market_rtdb_service.dart';
+import 'market_ilan_duzenle_page.dart';
 
-const String ADMIN_EMAIL = 'mehmetilik19@gmail.com';
+const String adminEmail = 'mehmetilik19@gmail.com';
 
 class MarketDetayPage extends StatefulWidget {
   final MarketListingModel item;
-  const MarketDetayPage({super.key, required this.item});
+
+  const MarketDetayPage({
+    super.key,
+    required this.item,
+  });
 
   @override
   State<MarketDetayPage> createState() => _MarketDetayPageState();
 }
 
 class _MarketDetayPageState extends State<MarketDetayPage> {
+  late MarketListingModel item;
   int selectedIndex = 0;
 
-  DatabaseReference get _commentsRef =>
-      FirebaseDatabase.instance.ref('market_comments/${widget.item.id}');
+  late final DatabaseReference _commentsRef;
+  late final Stream<DatabaseEvent> _commentsStream;
 
-  String _s(dynamic v) => (v ?? '').toString().trim();
-
-  int _toInt(dynamic v, {int fallback = 0}) {
-    if (v is int) return v;
-    if (v is double) return v.round();
-    return int.tryParse(_s(v)) ?? fallback;
+  @override
+  void initState() {
+    super.initState();
+    item = widget.item;
+    _commentsRef =
+        FirebaseDatabase.instance.ref('market_comments/${item.id}');
+    _commentsStream = _commentsRef.onValue.asBroadcastStream();
   }
 
-  String tl(int v) => '$v TL';
+  String _s(dynamic value) => (value ?? '').toString().trim();
 
-  bool get _canDelete {
+  int _toInt(dynamic value, {int fallback = 0}) {
+    if (value is int) return value;
+    if (value is double) return value.round();
+    return int.tryParse(_s(value)) ?? fallback;
+  }
+
+  bool get _canManage {
     final user = FirebaseAuth.instance.currentUser;
     final email = (user?.email ?? '').toLowerCase().trim();
     final uid = user?.uid ?? '';
-    final ownerUid = _s(widget.item.attrs['ownerUid']);
+    final ownerUid = _s(item.attrs['ownerUid']);
 
-    return email == ADMIN_EMAIL.toLowerCase() || (uid.isNotEmpty && uid == ownerUid);
+    return email == adminEmail.toLowerCase() ||
+        (uid.isNotEmpty && uid == ownerUid);
   }
 
-  int oldPriceOf(MarketListingModel x) {
-    return _toInt(
-      x.oldPrice != 0
-          ? x.oldPrice
-          : x.attrs['oldPrice'] ??
-          x.attrs['old_price'] ??
-          x.attrs['eskiFiyat'] ??
-          x.attrs['listPrice'],
+  List<String> get _photos => item.photoUrls
+      .map((photo) => photo.trim())
+      .where((photo) => photo.isNotEmpty)
+      .toSet()
+      .toList();
+
+  List<String> get _descriptionItems {
+    final raw = _s(
+      item.attrs['description'] ??
+          item.attrs['aciklama'] ??
+          item.attrs['productDescription'] ??
+          item.attrs['urunBilgileri'],
     );
+
+    if (raw.isEmpty) return const [];
+
+    return raw
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\r', '\n')
+        .split(RegExp(r'[•\n]+'))
+        .map(
+          (part) => part
+              .replaceFirst(RegExp(r'^\s*[-–—]\s*'), '')
+              .replaceAll(RegExp(r'\s+'), ' ')
+              .trim(),
+        )
+        .where((part) => part.isNotEmpty)
+        .toList();
   }
 
-  String ilanCodeOf(MarketListingModel x) {
-    final code = _s(
-      x.ilanCode.isNotEmpty
-          ? x.ilanCode
-          : x.attrs['ilanCode'] ??
-          x.attrs['listingCode'] ??
-          x.attrs['code'],
-    );
+  List<MapEntry<String, String>> get _features {
+    final result = <MapEntry<String, String>>[];
 
-    if (code.isNotEmpty) return code;
+    void add(String title, dynamic value) {
+      final cleaned = _s(value);
+      if (cleaned.isEmpty) return;
 
-    final cleanId = x.id.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+      if (!result.any(
+        (entry) =>
+            entry.key.toLowerCase() == title.toLowerCase() &&
+            entry.value.toLowerCase() == cleaned.toLowerCase(),
+      )) {
+        result.add(MapEntry(title, cleaned));
+      }
+    }
+
+    add('Marka', item.brand);
+    add('Durum', item.condition == '1el' ? '1. El' : '2. El');
+    add('Şehir', item.city);
+    add('Kategori', item.categoryPath);
+    add('Materyal', item.attrs['material'] ?? item.attrs['materyal']);
+    add('Renk', item.attrs['color'] ?? item.attrs['renk']);
+    add('Yükseklik', item.attrs['height'] ?? item.attrs['yukseklik']);
+    add('Genişlik', item.attrs['width'] ?? item.attrs['genislik']);
+    add('Derinlik', item.attrs['depth'] ?? item.attrs['derinlik']);
+
+    return result;
+  }
+
+  String get _ilanCode {
+    if (item.ilanCode.trim().isNotEmpty) return item.ilanCode.trim();
+
+    final cleanId = item.id.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
     final short = cleanId.length > 6
         ? cleanId.substring(cleanId.length - 6).toUpperCase()
         : cleanId.toUpperCase();
-
     return 'MKT-$short';
   }
 
-  void _snack(String msg) {
+  void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
 
-  Future<void> _copyCode(String code) async {
-    await Clipboard.setData(ClipboardData(text: code));
-    _snack('İlan kodu kopyalandı: $code');
+  Future<void> _copyCode() async {
+    await Clipboard.setData(ClipboardData(text: _ilanCode));
+    _snack('İlan kodu kopyalandı: $_ilanCode');
+  }
+
+  Future<void> _openEditPage() async {
+    if (!_canManage) {
+      _snack('Bu ilanı düzenleme yetkin yok.');
+      return;
+    }
+
+    final updated = await Navigator.push<MarketListingModel>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MarketIlanDuzenlePage(item: item),
+      ),
+    );
+
+    if (updated == null || !mounted) return;
+
+    setState(() {
+      item = updated;
+      if (selectedIndex >= _photos.length) {
+        selectedIndex = 0;
+      }
+    });
   }
 
   Future<void> _deleteListing() async {
-    if (!_canDelete) {
+    if (!_canManage) {
       _snack('Bu ilanı silme yetkin yok.');
       return;
     }
 
-    final ok = await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('İlan silinsin mi?'),
         content: const Text('Bu işlem geri alınamaz.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(dialogContext, false),
             child: const Text('Vazgeç'),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
+            onPressed: () => Navigator.pop(dialogContext, true),
             child: const Text('Sil'),
           ),
         ],
       ),
     );
 
-    if (ok != true) return;
+    if (confirmed != true) return;
 
-    final id = widget.item.id;
+    try {
+      await MarketRtdbService().deleteListing(item.id);
 
-    await Future.wait([
-      FirebaseDatabase.instance.ref('market_listings/$id').remove(),
-      FirebaseDatabase.instance.ref('market/listings/$id').remove(),
-      FirebaseDatabase.instance.ref('listings/market/$id').remove(),
-      FirebaseDatabase.instance.ref('gift_designs/$id').remove(),
-      FirebaseDatabase.instance.ref('market_comments/$id').remove(),
-    ]);
-
-    if (!mounted) return;
-    _snack('İlan silindi');
-    Navigator.pop(context);
+      if (!mounted) return;
+      _snack('İlan silindi');
+      Navigator.pop(context);
+    } catch (error) {
+      _snack('İlan silinemedi: $error');
+    }
   }
 
   void _addToCart() {
-    MarketCart.add(widget.item, qty: 1);
+    MarketCart.add(item, qty: 1);
     _snack('Sepete eklendi ✅');
-    setState(() {});
-  }
-
-  void _openGallery(List<String> photos, int startIndex) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => _FullGalleryPage(photos: photos, startIndex: startIndex),
-      ),
-    );
   }
 
   Future<void> _addComment() async {
-    final u = FirebaseAuth.instance.currentUser;
-    if (u == null) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
       _snack('Yorum için giriş yapmalısın.');
       return;
     }
 
-    final textC = TextEditingController();
+    final controller = TextEditingController();
     int rating = 5;
 
-    final ok = await showModalBottomSheet<bool>(
+    final confirmed = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
-      ),
-      builder: (_) {
-        final viewInsets = MediaQuery.of(context).viewInsets;
+      builder: (sheetContext) {
+        final insets = MediaQuery.of(sheetContext).viewInsets;
+
         return Padding(
-          padding: EdgeInsets.only(bottom: viewInsets.bottom),
+          padding: EdgeInsets.only(bottom: insets.bottom),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(14, 12, 14, 16),
             child: Column(
@@ -165,16 +229,19 @@ class _MarketDetayPageState extends State<MarketDetayPage> {
               children: [
                 const Text(
                   'Yorum Yaz',
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 _StarPicker(
                   initial: rating,
-                  onChanged: (v) => rating = v,
+                  onChanged: (value) => rating = value,
                 ),
                 const SizedBox(height: 10),
                 TextField(
-                  controller: textC,
+                  controller: controller,
                   minLines: 2,
                   maxLines: 5,
                   decoration: const InputDecoration(
@@ -184,16 +251,15 @@ class _MarketDetayPageState extends State<MarketDetayPage> {
                 ),
                 const SizedBox(height: 12),
                 SizedBox(
-                  height: 46,
                   width: double.infinity,
+                  height: 46,
                   child: ElevatedButton(
                     onPressed: () {
-                      final t = textC.text.trim();
-                      if (t.length < 3) {
+                      if (controller.text.trim().length < 3) {
                         _snack('Yorum çok kısa.');
                         return;
                       }
-                      Navigator.pop(context, true);
+                      Navigator.pop(sheetContext, true);
                     },
                     child: const Text('Gönder'),
                   ),
@@ -205,21 +271,20 @@ class _MarketDetayPageState extends State<MarketDetayPage> {
       },
     );
 
-    final t = textC.text.trim();
-    textC.dispose();
+    final text = controller.text.trim();
+    controller.dispose();
 
-    if (ok != true) return;
+    if (confirmed != true) return;
 
-    final now = DateTime.now().millisecondsSinceEpoch;
     final key = _commentsRef.push().key;
     if (key == null) return;
 
     await _commentsRef.child(key).set({
-      'uid': u.uid,
-      'name': (u.displayName ?? u.email ?? 'Kullanıcı'),
+      'uid': user.uid,
+      'name': user.displayName ?? user.email ?? 'Kullanıcı',
       'rating': rating,
-      'text': t,
-      'createdAt': now,
+      'text': text,
+      'createdAt': DateTime.now().millisecondsSinceEpoch,
     });
 
     _snack('Yorum eklendi ✅');
@@ -227,204 +292,121 @@ class _MarketDetayPageState extends State<MarketDetayPage> {
 
   @override
   Widget build(BuildContext context) {
-    final x = widget.item;
-    final photos = x.photoUrls;
-    final cover =
-    photos.isNotEmpty ? photos[selectedIndex.clamp(0, photos.length - 1)] : null;
+    final photos = _photos;
+    final safeIndex = photos.isEmpty
+        ? 0
+        : selectedIndex.clamp(0, photos.length - 1);
+    final cover = photos.isEmpty ? null : photos[safeIndex];
 
-    final oldPrice = oldPriceOf(x);
-    final hasDiscount = oldPrice > x.price && oldPrice > 0;
-    final ilanCode = ilanCodeOf(x);
+    final hasDiscount =
+        item.oldPrice > item.price && item.oldPrice > 0;
 
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F5),
       appBar: AppBar(
         title: const Text('Ürün Detayı'),
         actions: [
-          if (_canDelete)
+          if (_canManage)
             IconButton(
-              tooltip: 'İlanı Sil',
-              icon: const Icon(Icons.delete_outline),
+              tooltip: 'Düzenle',
+              onPressed: _openEditPage,
+              icon: const Icon(Icons.edit_outlined),
+            ),
+          if (_canManage)
+            IconButton(
+              tooltip: 'Sil',
               onPressed: _deleteListing,
+              icon: const Icon(Icons.delete_outline),
             ),
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 20),
+        padding: const EdgeInsets.only(bottom: 24),
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: Stack(
-              children: [
-                AspectRatio(
-                  aspectRatio: 1,
-                  child: cover == null
-                      ? Container(
-                    color: Colors.black.withOpacity(0.04),
-                    child: const Center(child: Icon(Icons.image_outlined)),
-                  )
-                      : InkWell(
-                    onTap: () => _openGallery(photos, selectedIndex),
-                    child: Image.network(
-                      cover,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: Colors.black.withOpacity(0.04),
-                        child: const Center(child: Icon(Icons.broken_image)),
-                      ),
-                    ),
-                  ),
-                ),
-                if (hasDiscount)
-                  Positioned(
-                    left: 12,
-                    top: 12,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                      decoration: BoxDecoration(
-                        color: Colors.green,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: const Text(
-                        'İNDİRİM',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                          fontSize: 12,
+          _MainImage(
+            cover: cover,
+            photoCount: photos.length,
+            currentIndex: safeIndex,
+            hasDiscount: hasDiscount,
+            onTap: photos.isEmpty
+                ? null
+                : () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => _FullGalleryPage(
+                          photos: photos,
+                          startIndex: safeIndex,
                         ),
                       ),
-                    ),
-                  ),
-                if (photos.isNotEmpty)
-                  Positioned(
-                    right: 10,
-                    bottom: 10,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.45),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        '${selectedIndex + 1}/${photos.length}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
+                    );
+                  },
           ),
-
-          const SizedBox(height: 10),
-
           if (photos.length > 1)
-            SizedBox(
-              height: 74,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemCount: photos.length,
-                padding: const EdgeInsets.symmetric(horizontal: 2),
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, i) {
-                  final url = photos[i];
-                  final sel = i == selectedIndex;
-                  return InkWell(
-                    borderRadius: BorderRadius.circular(14),
-                    onTap: () => setState(() => selectedIndex = i),
-                    child: Container(
-                      width: 74,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: sel ? Colors.black : Colors.black.withOpacity(0.10),
-                          width: sel ? 2 : 1,
-                        ),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(13),
-                        child: Image.network(
-                          url,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: Colors.black.withOpacity(0.04),
-                            child: const Icon(Icons.broken_image),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
+            _Thumbnails(
+              photos: photos,
+              selectedIndex: safeIndex,
+              onSelected: (index) {
+                setState(() => selectedIndex = index);
+              },
             ),
-
-          const SizedBox(height: 14),
-
-          Text(
-            x.title,
-            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20),
-          ),
-
-          const SizedBox(height: 8),
-
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.07),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.green.withOpacity(0.18)),
-            ),
+          _WhiteSection(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(
+                  item.title,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    height: 1.15,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
                 if (hasDiscount) ...[
                   Text(
-                    tl(oldPrice),
+                    '${item.oldPrice} TL',
                     style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
+                      fontSize: 14,
                       color: Colors.grey,
                       decoration: TextDecoration.lineThrough,
                       decorationThickness: 2,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                 ],
                 Text(
-                  tl(x.price),
+                  '${item.price} TL',
                   style: TextStyle(
+                    fontSize: 25,
                     fontWeight: FontWeight.w900,
-                    fontSize: hasDiscount ? 26 : 22,
-                    color: hasDiscount ? Colors.green : Colors.black,
+                    color: hasDiscount
+                        ? const Color(0xFF16863B)
+                        : Colors.black87,
                   ),
                 ),
                 const SizedBox(height: 8),
                 InkWell(
-                  borderRadius: BorderRadius.circular(999),
-                  onTap: () => _copyCode(ilanCode),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.06),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
+                  onTap: _copyCode,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'İlan Kodu: $ilanCode',
+                          'İlan Kodu: $_ilanCode',
                           style: TextStyle(
-                            fontWeight: FontWeight.w900,
                             fontSize: 12,
-                            color: Colors.black.withOpacity(0.70),
+                            fontWeight: FontWeight.w700,
+                            color: Colors.black.withOpacity(0.62),
                           ),
                         ),
-                        const SizedBox(width: 6),
+                        const SizedBox(width: 5),
                         Icon(
                           Icons.copy_rounded,
-                          size: 15,
-                          color: Colors.black.withOpacity(0.55),
+                          size: 14,
+                          color: Colors.black.withOpacity(0.52),
                         ),
                       ],
                     ),
@@ -433,111 +415,116 @@ class _MarketDetayPageState extends State<MarketDetayPage> {
               ],
             ),
           ),
-
-          const SizedBox(height: 14),
-
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Theme.of(context).cardColor,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.black.withOpacity(0.06)),
+          if (_descriptionItems.isNotEmpty)
+            _WhiteSection(
+              child: _ProductInfo(items: _descriptionItems),
             ),
-            child: Column(
-              children: [
-                _InfoRow(title: 'Durum', value: x.condition == '1el' ? '1. El' : '2. El'),
-                _InfoRow(title: 'Şehir', value: x.city),
-                _InfoRow(title: 'Kategori', value: x.categoryPath),
-              ],
+          if (_features.isNotEmpty)
+            _WhiteSection(
+              child: _ProductFeatures(features: _features),
             ),
-          ),
-
-          const SizedBox(height: 14),
-
-          SizedBox(
-            height: 50,
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: _addToCart,
-              icon: const Icon(Icons.add_shopping_cart),
-              label: const Text(
-                'Sepete Ekle',
-                style: TextStyle(fontWeight: FontWeight.w900),
+          _WhiteSection(
+            child: SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: _addToCart,
+                icon: const Icon(Icons.add_shopping_cart),
+                label: const Text(
+                  'Sepete Ekle',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
               ),
             ),
           ),
-
-          const SizedBox(height: 18),
-
-          StreamBuilder<DatabaseEvent>(
-            stream: _commentsRef.onValue,
-            builder: (context, snap) {
-              final raw = snap.data?.snapshot.value;
-              final list = <Map<dynamic, dynamic>>[];
-
-              if (raw is Map) {
-                for (final e in raw.entries) {
-                  if (e.value is Map) {
-                    list.add(Map<dynamic, dynamic>.from(e.value as Map));
-                  }
+          _WhiteSection(
+            child: StreamBuilder<DatabaseEvent>(
+              stream: _commentsStream,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return const Text(
+                    'Yorumlar yüklenemedi.',
+                    style: TextStyle(color: Colors.red),
+                  );
                 }
-                list.sort(
-                      (a, b) => _toInt(b['createdAt']).compareTo(_toInt(a['createdAt'])),
-                );
-              }
 
-              final count = list.length;
-              final avg = count == 0
-                  ? 0.0
-                  : list.fold<int>(0, (s, m) => s + _toInt(m['rating'])) / count;
+                final raw = snapshot.data?.snapshot.value;
+                final comments = <Map<dynamic, dynamic>>[];
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Text(
-                        'Yorumlar',
-                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
-                      ),
-                      const Spacer(),
-                      if (count > 0)
-                        Row(
-                          children: [
-                            const Icon(Icons.star, size: 18),
-                            const SizedBox(width: 4),
-                            Text(
-                              avg.toStringAsFixed(1),
-                              style: const TextStyle(fontWeight: FontWeight.w900),
-                            ),
-                            Text(
-                              ' ($count)',
-                              style: TextStyle(color: Colors.black.withOpacity(0.6)),
-                            ),
-                          ],
+                if (raw is Map) {
+                  for (final entry in raw.entries) {
+                    if (entry.value is Map) {
+                      comments.add(
+                        Map<dynamic, dynamic>.from(entry.value as Map),
+                      );
+                    }
+                  }
+
+                  comments.sort(
+                    (a, b) => _toInt(b['createdAt'])
+                        .compareTo(_toInt(a['createdAt'])),
+                  );
+                }
+
+                final count = comments.length;
+                final average = count == 0
+                    ? 0.0
+                    : comments.fold<int>(
+                          0,
+                          (sum, comment) =>
+                              sum + _toInt(comment['rating']),
+                        ) /
+                        count;
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Yorumlar',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    height: 44,
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _addComment,
-                      icon: const Icon(Icons.rate_review_outlined),
-                      label: const Text('Yorum Yaz'),
+                        const Spacer(),
+                        if (count > 0) ...[
+                          const Icon(
+                            Icons.star,
+                            size: 18,
+                            color: Colors.amber,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${average.toStringAsFixed(1)} ($count)',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (count == 0)
-                    const Text('Henüz yorum yok.')
-                  else
-                    Column(
-                      children: [for (final m in list) _CommentTile(data: m)],
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: OutlinedButton.icon(
+                        onPressed: _addComment,
+                        icon: const Icon(Icons.rate_review_outlined),
+                        label: const Text('Yorum Yaz'),
+                      ),
                     ),
-                ],
-              );
-            },
+                    const SizedBox(height: 12),
+                    if (comments.isEmpty)
+                      const Text('Henüz yorum yok.')
+                    else
+                      for (final comment in comments)
+                        _CommentTile(data: comment),
+                  ],
+                );
+              },
+            ),
           ),
         ],
       ),
@@ -545,42 +532,301 @@ class _MarketDetayPageState extends State<MarketDetayPage> {
   }
 }
 
-class _InfoRow extends StatelessWidget {
-  final String title;
-  final String value;
+class _WhiteSection extends StatelessWidget {
+  final Widget child;
 
-  const _InfoRow({
-    required this.title,
-    required this.value,
+  const _WhiteSection({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      color: Colors.white,
+      child: child,
+    );
+  }
+}
+
+class _MainImage extends StatelessWidget {
+  final String? cover;
+  final int photoCount;
+  final int currentIndex;
+  final bool hasDiscount;
+  final VoidCallback? onTap;
+
+  const _MainImage({
+    required this.cover,
+    required this.photoCount,
+    required this.currentIndex,
+    required this.hasDiscount,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (value.trim().isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 82,
-            child: Text(
-              title,
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: Colors.black.withOpacity(0.55),
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.all(12),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          children: [
+            AspectRatio(
+              aspectRatio: 1,
+              child: cover == null
+                  ? const _ImagePlaceholder()
+                  : InkWell(
+                      onTap: onTap,
+                      child: Image.network(
+                        cover!,
+                        key: ValueKey('main-$cover'),
+                        fit: BoxFit.contain,
+                        gaplessPlayback: true,
+                        errorBuilder: (_, __, ___) =>
+                            const _ImagePlaceholder(),
+                      ),
+                    ),
+            ),
+            if (hasDiscount)
+              Positioned(
+                left: 10,
+                top: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF16863B),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Text(
+                    'İNDİRİM',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.w800),
-            ),
-          ),
-        ],
+            if (photoCount > 0)
+              Positioned(
+                right: 10,
+                bottom: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.48),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${currentIndex + 1}/$photoCount',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _Thumbnails extends StatelessWidget {
+  final List<String> photos;
+  final int selectedIndex;
+  final ValueChanged<int> onSelected;
+
+  const _Thumbnails({
+    required this.photos,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: SizedBox(
+        height: 70,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: photos.length,
+          separatorBuilder: (_, __) => const SizedBox(width: 7),
+          itemBuilder: (context, index) {
+            final photo = photos[index];
+            final selected = index == selectedIndex;
+
+            return InkWell(
+              onTap: () => onSelected(index),
+              child: Container(
+                width: 70,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: selected
+                        ? Colors.orange
+                        : Colors.black.withOpacity(0.10),
+                    width: selected ? 2 : 1,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(9),
+                  child: Image.network(
+                    photo,
+                    key: ValueKey('thumb-$index-$photo'),
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    errorBuilder: (_, __, ___) =>
+                        const _ImagePlaceholder(),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _ImagePlaceholder extends StatelessWidget {
+  const _ImagePlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: const Color(0xFFF1F1F1),
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.broken_image_outlined,
+        size: 45,
+        color: Colors.grey,
+      ),
+    );
+  }
+}
+
+class _ProductInfo extends StatelessWidget {
+  final List<String> items;
+
+  const _ProductInfo({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Ürün Bilgileri',
+          style: TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 9),
+        for (final item in items)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 5),
+                  child: Icon(
+                    Icons.circle,
+                    size: 7,
+                    color: Colors.orange,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    item,
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.18,
+                      color: Colors.black.withOpacity(0.74),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ProductFeatures extends StatelessWidget {
+  final List<MapEntry<String, String>> features;
+
+  const _ProductFeatures({required this.features});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Ürün Özellikleri',
+          style: TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 8),
+        for (int index = 0; index < features.length; index++)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 9),
+            decoration: index == features.length - 1
+                ? null
+                : const BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: Color(0xFFECECEC)),
+                    ),
+                  ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: Text(
+                    features[index].key,
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.12,
+                      color: Colors.black.withOpacity(0.62),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 5,
+                  child: Text(
+                    features[index].value,
+                    style: const TextStyle(
+                      fontSize: 15,
+                      height: 1.12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
@@ -588,15 +834,32 @@ class _InfoRow extends StatelessWidget {
 class _FullGalleryPage extends StatefulWidget {
   final List<String> photos;
   final int startIndex;
-  const _FullGalleryPage({required this.photos, required this.startIndex});
+
+  const _FullGalleryPage({
+    required this.photos,
+    required this.startIndex,
+  });
 
   @override
   State<_FullGalleryPage> createState() => _FullGalleryPageState();
 }
 
 class _FullGalleryPageState extends State<_FullGalleryPage> {
-  late final PageController _pc = PageController(initialPage: widget.startIndex);
-  late int index = widget.startIndex;
+  late final PageController _controller;
+  late int index;
+
+  @override
+  void initState() {
+    super.initState();
+    index = widget.startIndex;
+    _controller = PageController(initialPage: widget.startIndex);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -608,20 +871,26 @@ class _FullGalleryPageState extends State<_FullGalleryPage> {
         title: Text('${index + 1}/${widget.photos.length}'),
       ),
       body: PageView.builder(
-        controller: _pc,
+        controller: _controller,
         itemCount: widget.photos.length,
-        onPageChanged: (i) => setState(() => index = i),
-        itemBuilder: (_, i) {
-          final url = widget.photos[i];
+        onPageChanged: (value) => setState(() => index = value),
+        itemBuilder: (_, imageIndex) {
+          final url = widget.photos[imageIndex];
+
           return InteractiveViewer(
             minScale: 1,
             maxScale: 4,
             child: Center(
               child: Image.network(
                 url,
+                key: ValueKey('gallery-$imageIndex-$url'),
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) =>
-                const Icon(Icons.broken_image, color: Colors.white),
+                gaplessPlayback: true,
+                errorBuilder: (_, __, ___) => const Icon(
+                  Icons.broken_image,
+                  color: Colors.white,
+                  size: 54,
+                ),
               ),
             ),
           );
@@ -634,28 +903,41 @@ class _FullGalleryPageState extends State<_FullGalleryPage> {
 class _StarPicker extends StatefulWidget {
   final int initial;
   final ValueChanged<int> onChanged;
-  const _StarPicker({required this.initial, required this.onChanged});
+
+  const _StarPicker({
+    required this.initial,
+    required this.onChanged,
+  });
 
   @override
   State<_StarPicker> createState() => _StarPickerState();
 }
 
 class _StarPickerState extends State<_StarPicker> {
-  late int v = widget.initial;
+  late int value;
+
+  @override
+  void initState() {
+    super.initState();
+    value = widget.initial;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
-      children: List.generate(5, (i) {
-        final idx = i + 1;
-        final filled = idx <= v;
+      children: List.generate(5, (index) {
+        final starValue = index + 1;
+
         return IconButton(
           onPressed: () {
-            setState(() => v = idx);
-            widget.onChanged(v);
+            setState(() => value = starValue);
+            widget.onChanged(value);
           },
-          icon: Icon(filled ? Icons.star : Icons.star_border),
+          icon: Icon(
+            starValue <= value ? Icons.star : Icons.star_border,
+            color: Colors.amber,
+          ),
         );
       }),
     );
@@ -664,35 +946,31 @@ class _StarPickerState extends State<_StarPicker> {
 
 class _CommentTile extends StatelessWidget {
   final Map<dynamic, dynamic> data;
+
   const _CommentTile({required this.data});
 
-  String _s(dynamic v) => (v ?? '').toString().trim();
+  String _s(dynamic value) => (value ?? '').toString().trim();
 
-  int _toInt(dynamic v, {int fallback = 0}) {
-    if (v is int) return v;
-    return int.tryParse(_s(v)) ?? fallback;
+  int _toInt(dynamic value) {
+    if (value is int) return value;
+    return int.tryParse(_s(value)) ?? 0;
   }
 
   @override
   Widget build(BuildContext context) {
-    final name = _s(data['name']).isEmpty ? 'Kullanıcı' : _s(data['name']);
+    final name =
+        _s(data['name']).isEmpty ? 'Kullanıcı' : _s(data['name']);
     final text = _s(data['text']);
     final rating = _toInt(data['rating']).clamp(0, 5);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 9),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: Theme.of(context).cardColor,
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-            color: Colors.black.withOpacity(0.05),
-          )
-        ],
+        color: const Color(0xFFF8F8F8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.black.withOpacity(0.05)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -706,20 +984,26 @@ class _CommentTile extends StatelessWidget {
                 ),
               ),
               Row(
-                children: List.generate(5, (i) {
-                  final filled = (i + 1) <= rating;
-                  return Icon(
-                    filled ? Icons.star : Icons.star_border,
-                    size: 16,
-                  );
-                }),
+                children: List.generate(
+                  5,
+                  (index) => Icon(
+                    index + 1 <= rating
+                        ? Icons.star
+                        : Icons.star_border,
+                    size: 15,
+                    color: Colors.amber,
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 7),
           Text(
             text,
-            style: TextStyle(color: Colors.black.withOpacity(0.75), height: 1.2),
+            style: TextStyle(
+              height: 1.18,
+              color: Colors.black.withOpacity(0.75),
+            ),
           ),
         ],
       ),

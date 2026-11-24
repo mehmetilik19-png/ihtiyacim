@@ -16,7 +16,7 @@ import 'gecerken_beni_de_al_page.dart';
 import 'engelsiz_is_page.dart';
 import 'ustam_page.dart';
 import 'oyun_menu_page.dart';
-import 'tarzim_page.dart';
+
 import 'daily_wheel_page.dart';
 
 import 'package:ihtiyacim/models/market_listing_model.dart';
@@ -184,7 +184,7 @@ class _HomePageState extends State<HomePage> {
       } else if (pageTarget == 'ustam') {
         _go(context, UstamPage());
       } else if (pageTarget == 'tarzim') {
-        _go(context, const TarzimPage());
+        _go(context, const TarzimPage() as Widget);
       }
 
       return;
@@ -403,7 +403,7 @@ class _HomePageState extends State<HomePage> {
         subtitle: 'Stil',
         icon: Icons.checkroom_rounded,
         iconColor: const Color(0xFFFF4F9A),
-        onTap: () => _go(context, const TarzimPage()),
+        onTap: () => _go(context, const TarzimPage() as Widget),
       ),
       _HomeItem(
         title: 'Bilgi Oyunu',
@@ -505,6 +505,10 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+}
+
+class TarzimPage {
+  const TarzimPage();
 }
 
 class _AdminPopupAd extends StatelessWidget {

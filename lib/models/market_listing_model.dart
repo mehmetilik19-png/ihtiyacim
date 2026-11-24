@@ -48,66 +48,89 @@ class MarketListingModel {
   bool get hasDiscount => oldPrice > price && oldPrice > 0;
 
   MarketListingModel copyWith({
-    String? customerPhotoUrl,
+    String? title,
+    int? price,
+    int? oldPrice,
+    String? ilanCode,
+    String? condition,
+    String? categoryMain,
+    String? categorySub,
+    String? brand,
+    String? categoryId,
+    String? categoryPath,
+    Map<String, dynamic>? attrs,
+    String? city,
+    int? createdAt,
+    List<String>? photoUrls,
+    bool? isGift,
+    String? designId,
     String? giftColor,
+    String? customerPhotoUrl,
   }) {
     return MarketListingModel(
       id: id,
-      title: title,
-      price: price,
-      oldPrice: oldPrice,
-      ilanCode: ilanCode,
-      condition: condition,
-      categoryMain: categoryMain,
-      categorySub: categorySub,
-      brand: brand,
-      categoryId: categoryId,
-      categoryPath: categoryPath,
-      attrs: attrs,
-      city: city,
-      createdAt: createdAt,
-      photoUrls: photoUrls,
-      isGift: isGift,
-      designId: designId,
+      title: title ?? this.title,
+      price: price ?? this.price,
+      oldPrice: oldPrice ?? this.oldPrice,
+      ilanCode: ilanCode ?? this.ilanCode,
+      condition: condition ?? this.condition,
+      categoryMain: categoryMain ?? this.categoryMain,
+      categorySub: categorySub ?? this.categorySub,
+      brand: brand ?? this.brand,
+      categoryId: categoryId ?? this.categoryId,
+      categoryPath: categoryPath ?? this.categoryPath,
+      attrs: attrs ?? this.attrs,
+      city: city ?? this.city,
+      createdAt: createdAt ?? this.createdAt,
+      photoUrls: photoUrls ?? this.photoUrls,
+      isGift: isGift ?? this.isGift,
+      designId: designId ?? this.designId,
       giftColor: giftColor ?? this.giftColor,
       customerPhotoUrl: customerPhotoUrl ?? this.customerPhotoUrl,
     );
   }
 
   factory MarketListingModel.fromMap(String id, Map<dynamic, dynamic> map) {
-    String _s(dynamic v) => (v ?? '').toString().trim();
+    String s(dynamic value) => (value ?? '').toString().trim();
 
-    int _i(dynamic v) {
-      if (v is int) return v;
-      if (v is double) return v.round();
-      return int.tryParse((v ?? '0').toString()) ?? 0;
+    int i(dynamic value) {
+      if (value is int) return value;
+      if (value is double) return value.round();
+      return int.tryParse((value ?? '0').toString()) ?? 0;
     }
 
-    dynamic rawPhotos = map['photoUrls'];
-    rawPhotos ??= map['photos'];
-    rawPhotos ??= map['images'];
+    dynamic rawPhotos = map['photoUrls'] ?? map['photos'] ?? map['images'];
+    final photos = <String>[];
 
-    final photos = (rawPhotos is List)
-        ? rawPhotos
-        .map((e) => e.toString())
-        .where((e) => e.trim().isNotEmpty)
-        .toList()
-        : <String>[];
+    if (rawPhotos is List) {
+      photos.addAll(
+        rawPhotos
+            .map((e) => e?.toString().trim() ?? '')
+            .where((e) => e.isNotEmpty),
+      );
+    } else if (rawPhotos is Map) {
+      photos.addAll(
+        rawPhotos.values
+            .map((e) => e?.toString().trim() ?? '')
+            .where((e) => e.isNotEmpty),
+      );
+    }
 
     final rawAttrs = map['attrs'];
-    final attrs =
-    (rawAttrs is Map) ? Map<String, dynamic>.from(rawAttrs) : <String, dynamic>{};
+    final attrs = rawAttrs is Map
+        ? Map<String, dynamic>.from(rawAttrs)
+        : <String, dynamic>{};
 
-    String t = _s(map['title']);
-    if (t.isEmpty) t = _s(map['name']);
-    if (t.isEmpty) t = _s(map['productName']);
-    if (t.isEmpty) t = 'İlan';
+    String title = s(map['title']);
+    if (title.isEmpty) title = s(map['name']);
+    if (title.isEmpty) title = s(map['productName']);
+    if (title.isEmpty) title = 'İlan';
 
-    String c = _s(map['city']);
-    if (c.isEmpty) c = _s(map['il']);
-    if (c.isEmpty) c = _s(map['location']);
+    String city = s(map['city']);
+    if (city.isEmpty) city = s(map['il']);
+    if (city.isEmpty) city = s(map['location']);
 
-    final oldPrice = _i(
+    final oldPrice = i(
       map['oldPrice'] ??
           attrs['oldPrice'] ??
           map['old_price'] ??
@@ -116,7 +139,7 @@ class MarketListingModel {
           attrs['eskiFiyat'],
     );
 
-    String ilanCode = _s(
+    String ilanCode = s(
       map['ilanCode'] ??
           attrs['ilanCode'] ??
           map['listingCode'] ??
@@ -135,20 +158,20 @@ class MarketListingModel {
 
     return MarketListingModel(
       id: id,
-      title: t,
-      price: _i(map['price']),
+      title: title,
+      price: i(map['price']),
       oldPrice: oldPrice,
       ilanCode: ilanCode,
-      condition: _s(map['condition']).isEmpty ? '2el' : _s(map['condition']),
-      categoryMain: _s(map['categoryMain']),
-      categorySub: _s(map['categorySub']),
-      brand: _s(map['brand']),
-      categoryId: _s(map['categoryId']),
-      categoryPath: _s(map['categoryPath']),
+      condition: s(map['condition']).isEmpty ? '2el' : s(map['condition']),
+      categoryMain: s(map['categoryMain']),
+      categorySub: s(map['categorySub']),
+      brand: s(map['brand']),
+      categoryId: s(map['categoryId']),
+      categoryPath: s(map['categoryPath']),
       attrs: attrs,
-      city: c,
-      createdAt: _i(map['createdAt']),
-      photoUrls: photos,
+      city: city,
+      createdAt: i(map['createdAt']),
+      photoUrls: photos.toSet().toList(),
       isGift: map['isGift'] == true,
       designId: map['designId']?.toString(),
       giftColor: map['giftColor']?.toString(),
@@ -157,9 +180,9 @@ class MarketListingModel {
   }
 
   Map<String, dynamic> toMap() {
-    final newAttrs = Map<String, dynamic>.from(attrs);
-    newAttrs['oldPrice'] = oldPrice;
-    newAttrs['ilanCode'] = ilanCode;
+    final newAttrs = Map<String, dynamic>.from(attrs)
+      ..['oldPrice'] = oldPrice
+      ..['ilanCode'] = ilanCode;
 
     return {
       'title': title,

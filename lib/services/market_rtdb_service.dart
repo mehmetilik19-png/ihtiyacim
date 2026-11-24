@@ -1,4 +1,5 @@
 import 'package:firebase_database/firebase_database.dart';
+
 import '../models/market_listing_model.dart';
 
 class MarketRtdbService {
@@ -27,29 +28,36 @@ class MarketRtdbService {
         }
       });
 
-      list.removeWhere((x) => x.attrs['active'] == false);
+      list.removeWhere((item) => item.attrs['active'] == false);
       list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
       return list;
-    });
+    }).asBroadcastStream();
   }
 
   Future<String> addListing(MarketListingModel model) async {
     final now = DateTime.now().millisecondsSinceEpoch;
     final ref = _ref.push();
-    final id = ref.key!;
+    final id = ref.key;
+
+    if (id == null) {
+      throw StateError('İlan kimliği oluşturulamadı.');
+    }
 
     final data = model.toMap();
-    data['createdAt'] = data['createdAt'] ?? now;
+    data['createdAt'] = model.createdAt > 0 ? model.createdAt : now;
     data['updatedAt'] = now;
 
     await ref.set(data);
     return id;
   }
 
-  Future<void> updateListing(String id, Map<String, dynamic> patch) async {
-    patch['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
-    await _ref.child(id).update(patch);
+  Future<void> updateListing(
+      String id,
+      Map<String, dynamic> patch,
+      ) async {
+    final data = Map<String, dynamic>.from(patch);
+    data['updatedAt'] = DateTime.now().millisecondsSinceEpoch;
+    await _ref.child(id).update(data);
   }
 
   Future<void> deactivateListing(String id) async {
@@ -60,7 +68,9 @@ class MarketRtdbService {
   }
 
   Future<void> deleteListing(String id) async {
-    await _ref.child(id).remove();
-    await _db.ref('market_comments/$id').remove();
+    await Future.wait([
+      _ref.child(id).remove(),
+      _db.ref('market_comments/$id').remove(),
+    ]);
   }
 }

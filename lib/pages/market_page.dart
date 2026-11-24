@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'market_catalog.dart';
 
 import 'package:ihtiyacim/models/market_listing_model.dart';
-import 'package:ihtiyacim/features/market/services/market_cart.dart';
+import 'package:ihtiyacim/pages/market_cart.dart';
 
 import '../services/market_rtdb_service.dart';
 
