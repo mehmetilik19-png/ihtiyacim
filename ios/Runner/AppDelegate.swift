@@ -1,3 +1,4 @@
+
 import Flutter
 import UIKit
 import FirebaseCore
@@ -12,7 +13,7 @@ import GoogleMaps
 
     FirebaseApp.configure()
 
-    GMSServices.provideAPIKey("BURAYA_IOS_GOOGLE_MAPS_API_KEY")
+    GMSServices.provideAPIKey("AIzaSyD8kScXFWGgvrBYi_qXnSXUWtEs-Wl5ru4")
 
     GeneratedPluginRegistrant.register(with: self)
 
